@@ -1,0 +1,25 @@
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# Environment Variables (Keep secrets private!)
+.env
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# IDE / Tool folders
+.gemini/
+.kilo/
+.kilocode/
+.vscode/
+.idea/
+
+# Local databases / logs
+*.log
+users.json
