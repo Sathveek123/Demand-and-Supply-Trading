@@ -13,6 +13,7 @@ if sys.stderr.encoding != 'utf-8':
 from fastapi import FastAPI, BackgroundTasks, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
 import asyncio
 from typing import Dict, Any
 
@@ -28,7 +29,52 @@ import requests
 
 tg_application = init_telegram_app()
 
-app = FastAPI(title="Demand & Supply Pullback Trading Bot")
+@asynccontextmanager
+async def lifespan(app_instance):
+    """FastAPI lifespan handler — runs startup logic, then yields, then shutdown logic."""
+    # ── STARTUP ──
+    scheduler.start()
+
+    if settings.TELEGRAM_WEBHOOK_URL:
+        webhook_url = f"{settings.TELEGRAM_WEBHOOK_URL.rstrip('/')}/telegram/webhook"
+        print(f"[Telegram Bot]: Webhook Mode enabled. Registering webhook: {webhook_url}")
+        try:
+            token = settings.TELEGRAM_BOT_TOKEN
+            base_url = settings.TELEGRAM_BASE_URL.rstrip("/")
+            if not ("/bot" in base_url):
+                url = f"{base_url}/bot{token}/setWebhook"
+            else:
+                url = f"{base_url}{token}/setWebhook" if base_url.endswith("bot") else f"{base_url}/{token}/setWebhook"
+            proxies = None
+            if settings.TELEGRAM_PROXY:
+                proxies = {"http": settings.TELEGRAM_PROXY, "https": settings.TELEGRAM_PROXY}
+            resp = requests.get(url, params={"url": webhook_url}, proxies=proxies, timeout=10)
+            if resp.status_code == 200:
+                print(f"[Telegram Bot]: Webhook successfully registered: {resp.json()}")
+            else:
+                print(f"[Telegram Bot]: Webhook registration failed ({resp.status_code}): {resp.text}")
+        except Exception as e:
+            print(f"[Telegram Bot]: Exception during webhook registration: {e}")
+        await tg_application.initialize()
+        await tg_application.start()
+    else:
+        print("[Telegram Bot]: Webhook Mode disabled. Fallback to Polling Mode.")
+        import threading
+        t = threading.Thread(target=run_telegram_listener, daemon=True)
+        t.start()
+
+    yield  # ── application runs here ──
+
+    # ── SHUTDOWN ──
+    scheduler.stop()
+    if settings.TELEGRAM_WEBHOOK_URL:
+        try:
+            await tg_application.stop()
+            await tg_application.shutdown()
+        except Exception as e:
+            print(f"[Telegram Bot]: Exception during application shutdown: {e}")
+
+app = FastAPI(title="Demand & Supply Pullback Trading Bot", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -97,58 +143,6 @@ active_trades = {
 }
 
 daily_results = []  # stores all closed trades for summary
-
-@app.on_event("startup")
-async def startup_event():
-    # Start the live background scheduler to run check on every 3M candle close
-    scheduler.start()
-    
-    # Initialize Telegram updates listener depending on TELEGRAM_WEBHOOK_URL
-    if settings.TELEGRAM_WEBHOOK_URL:
-        webhook_url = f"{settings.TELEGRAM_WEBHOOK_URL.rstrip('/')}/telegram/webhook"
-        print(f"[Telegram Bot]: Webhook Mode enabled. Registering webhook: {webhook_url}")
-        
-        try:
-            token = settings.TELEGRAM_BOT_TOKEN
-            base_url = settings.TELEGRAM_BASE_URL.rstrip("/")
-            if not (base_url.endswith("/bot") or "/bot" in base_url):
-                url = f"{base_url}/bot{token}/setWebhook"
-            else:
-                url = f"{base_url}{token}/setWebhook" if base_url.endswith("bot") else f"{base_url}/{token}/setWebhook"
-            
-            proxies = None
-            if settings.TELEGRAM_PROXY:
-                proxies = {
-                    "http": settings.TELEGRAM_PROXY,
-                    "https": settings.TELEGRAM_PROXY
-                }
-            
-            resp = requests.get(url, params={"url": webhook_url}, proxies=proxies, timeout=10)
-            if resp.status_code == 200:
-                print(f"[Telegram Bot]: Webhook successfully registered: {resp.json()}")
-            else:
-                print(f"[Telegram Bot]: Webhook registration failed ({resp.status_code}): {resp.text}")
-        except Exception as e:
-            print(f"[Telegram Bot]: Exception during webhook registration: {e}")
-            
-        await tg_application.initialize()
-        await tg_application.start()
-    else:
-        print("[Telegram Bot]: Webhook Mode disabled. Fallback to Polling Mode.")
-        import threading
-        t = threading.Thread(target=run_telegram_listener, daemon=True)
-        t.start()
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    scheduler.stop()
-    
-    if settings.TELEGRAM_WEBHOOK_URL:
-        try:
-            await tg_application.stop()
-            await tg_application.shutdown()
-        except Exception as e:
-            print(f"[Telegram Bot]: Exception during application shutdown: {e}")
 
 def should_send_signal(asset, new_direction):
     if asset not in active_trades:
