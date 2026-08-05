@@ -103,20 +103,6 @@ async def startup_event():
     # Start the live background scheduler to run check on every 3M candle close
     scheduler.start()
     
-    # Broadcast Online Notification to Telegram
-    assets_str = " • ".join(settings.DEFAULT_ASSETS)
-    startup_msg = f"""🤖 SMC Pullback Strategy Engine v2.1
-
-Status    : 🔍 Online — Scanning & Fetching Setups 24/7
-Scanning  : {assets_str}
-Interval  : Every 3M candle close
-Data      : Binance via yfinance
-
-Signals will fire automatically whenever a valid setup is detected.
-
-Use the buttons below or type a command."""
-    telegram_bot.send_message(startup_msg)
-    
     # Initialize Telegram updates listener depending on TELEGRAM_WEBHOOK_URL
     if settings.TELEGRAM_WEBHOOK_URL:
         webhook_url = f"{settings.TELEGRAM_WEBHOOK_URL.rstrip('/')}/telegram/webhook"

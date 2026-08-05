@@ -13,6 +13,11 @@ class TradingBotScheduler:
     def __init__(self):
         self.running = False
         self.loop_thread = None
+        self.last_online_date = ""
+        self.last_rest_date = ""
+        self.last_daily_report_date = ""
+        self.last_weekly_report_date = ""
+        self.last_monthly_report_date = ""
 
     def start(self):
         """
@@ -44,9 +49,17 @@ class TradingBotScheduler:
 
             IST = pytz.timezone('Asia/Kolkata')
             now_ist = datetime.now(IST)
+            today_str = now_ist.strftime("%Y-%m-%d")
 
             # Rest period check: 4 AM to 9 AM IST (Daily maintenance & liquidity sync)
             if 4 <= now_ist.hour < 9:
+                # 4:00 AM IST Rest Period Broadcast (Fires ONCE per day)
+                if self.last_rest_date != today_str:
+                    try:
+                        broadcast_rest_status()
+                        self.last_rest_date = today_str
+                    except Exception as e:
+                        print(f"Error broadcasting rest status: {e}")
                 print(f"[SMC Scheduler]: Rest period active ({now_ist.strftime('%H:%M')} IST). Scanning paused until 9 AM IST.")
                 return
 
@@ -63,26 +76,28 @@ class TradingBotScheduler:
                 except Exception as e:
                     print(f"[SMC Scheduler]: Error scanning {asset}: {e}")
 
-            # Scheduled Notifications & Reports
+            # Scheduled Notifications & Reports (Strict 1-Time-Per-Day Guards)
             try:
-                # 9:00 AM IST Online Broadcast
-                if now_ist.hour == 9 and 0 <= now_ist.minute < 3:
+                # 9:00 AM IST Online Broadcast (Fires ONCE at 9:00 AM IST)
+                if now_ist.hour == 9 and self.last_online_date != today_str:
                     broadcast_online_status()
+                    self.last_online_date = today_str
 
-                # 4:00 AM IST Rest Period Broadcast
-                if now_ist.hour == 4 and 0 <= now_ist.minute < 3:
-                    broadcast_rest_status()
-
-                # 9:00 PM IST (21:00) Daily Summary
-                if now_ist.hour == 21 and 0 <= now_ist.minute < 3:
+                # 9:00 PM IST (21:00) Daily Summary (Fires ONCE at 9:00 PM IST)
+                if now_ist.hour == 21 and self.last_daily_report_date != today_str:
                     send_daily_summary()
+                    self.last_daily_report_date = today_str
+
                     # Sunday 9 PM IST -> Weekly 7-Day Summary
-                    if now_ist.weekday() == 6:
+                    if now_ist.weekday() == 6 and self.last_weekly_report_date != today_str:
                         send_weekly_summary()
+                        self.last_weekly_report_date = today_str
+
                     # Last day of month 9 PM IST -> Monthly Summary
                     last_day = calendar.monthrange(now_ist.year, now_ist.month)[1]
-                    if now_ist.day == last_day:
+                    if now_ist.day == last_day and self.last_monthly_report_date != today_str:
                         send_monthly_summary()
+                        self.last_monthly_report_date = today_str
             except Exception as e:
                 print(f"Error running scheduled reports: {e}")
 
