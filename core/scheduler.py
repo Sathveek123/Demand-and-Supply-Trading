@@ -115,14 +115,18 @@ class TradingBotScheduler:
 
         # Main execution loop
         while self.running:
-            # Sync to actual 3M boundary before each scan
-            wait_for_candle_close(timeframe_minutes=3)
-            
-            # Execute candle close check scan
-            job()
+            try:
+                # Sync to actual 3M boundary before each scan
+                wait_for_candle_close(timeframe_minutes=3)
+                
+                # Execute candle close check scan
+                job()
+            except Exception as e:
+                print(f"[SMC Scheduler Critical Guard]: Unhandled loop error: {e}")
             
             # Sleep 10 seconds to step past current block boundaries cleanly
             time.sleep(10)
+
 
 # Start scheduler immediately if run as script
 if __name__ == "__main__":

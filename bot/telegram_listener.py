@@ -378,13 +378,13 @@ async def run_debug_all(update: Update) -> None:
 
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show active bot status metrics."""
-    import sys
     import time
     import pytz
-    main_mod = sys.modules.get('__main__')
-    active_trades = getattr(main_mod, 'active_trades', {})
-    start_time = getattr(main_mod, 'start_time', time.time())
-    scheduler_obj = getattr(main_mod, 'scheduler', None)
+    import app as app_mod
+    active_trades = getattr(app_mod, 'active_trades', {})
+    start_time = getattr(app_mod, 'start_time', time.time())
+    scheduler_obj = getattr(app_mod, 'scheduler', None)
+
 
     IST = pytz.timezone('Asia/Kolkata')
 
@@ -413,7 +413,8 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         else:
             trades_str += f"\n  {asset:<10}: None"
 
-    daily_results = getattr(main_mod, 'daily_results', [])
+    daily_results = getattr(app_mod, 'daily_results', [])
+
     wins = sum(1 for r in daily_results if r.get('result') == 'WIN')
     total = len(daily_results)
     win_rate_str = f"{round((wins / total) * 100, 1)}% ({wins}/{total} wins)" if total > 0 else "N/A (0 closed)"

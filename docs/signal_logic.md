@@ -1,33 +1,36 @@
-# Telegram Signal & Reporting Format — SMC Trading Bot v2.1
+# Telegram Signal & Reporting Format — SMC Trading Bot v2.2
 
-## 1. Trade Signal Payload Format
+## 1. Official Live Signal Message Format
 
 ```text
-🟢 BUY SIGNAL — BTC/USDT
+╔══════════════════════╗
+║  🟢 BUY  •  EURUSD   ║
+╚══════════════════════╝
+⏰ 05-08-2026 23:55 IST
 
-Entry Zone : 64350.0 – 64410.0
-Entry Price: 64380.0
-Stop Loss  : 64150.0 (Risk: 230 pts)
-Target TP1 : 64610.0 (1:1 RR)
-Target TP2 : 64840.0 (1:2 RR)
+✅ Trend (15M)  : Bullish
+🧱 Zone         : Order Block + FVG
+⚡ Trigger      : Bullish Engulfing at OB
 
-Setup      : Bullish Order Block + FVG Confluence
-Timeframe  : 15M Trend (BULLISH) / 3M Entry
-Confidence : 92% 🔥
-Hold Time  : 15–45 Mins
+📋 Checklist:
+  • 15M Trend Alignment ✅
+  • 3M OB + FVG Confluence ✅
+  • Price Action Confirmation ✅
 
-⚡ Rule Checklist:
-  • 15M Trend Aligned : YES ✅
-  • Unmitigated OB   : YES ✅
-  • FVG Confluence   : YES ✅
-  • 3M Confirmation  : Engulfing ✅
+🎯 Entry Zone  →  1.1540 – 1.1542
+🛑 SL          →  1.1495  ⬇ Below OB
+💰 TP1         →  1.1587  (1:1 RR)
+💰 TP2         →  1.1633  (1:2 RR)
 
-Status: Signal Active 🚀
+⏱ Hold        : 15–30 min
+📊 Confidence : 🔥 HIGH
+──────────────────────
+⚠️ DYOR. Not financial advice.
 ```
 
 ---
 
-## 2. Performance Report Format
+## 2. Official Performance Report Format
 
 ```text
 📊 Daily Performance Report (9 PM IST) — 05-08-2026
