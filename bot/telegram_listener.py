@@ -441,6 +441,8 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
     if chat_id not in user_states:
         set_user_state(chat_id, "ON")
 
+    user_state = user_states.get(chat_id, "ON")
+
     text = update.message.text.strip()
     
     cleaned = text
@@ -448,6 +450,40 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
         cleaned = cleaned[1:].strip()
         
     text_upper = cleaned.upper()
+
+    # Always process /start, /stop, and /status commands regardless of OFF state
+    if text_upper.startswith("/START") or text_upper == "START":
+        await start(update, context)
+        return
+    elif text_upper.startswith("/STOP") or text_upper == "STOP":
+        await stop(update, context)
+        return
+    elif text_upper.startswith("/STATUS") or text_upper == "STATUS" or "STATUS" in text_upper:
+        await status(update, context)
+        return
+
+    # User OFF State Guard: If user turned bot OFF, block all manual scan buttons!
+    if user_state == "OFF":
+        msg = """🔴 Bot is currently turned OFF.
+
+To turn the bot ON and receive live signals & manual scans:
+👉 Type /start or tap START below."""
+        await update.message.reply_text(msg, reply_markup=get_main_keyboard())
+        return
+
+    # Daily Rest Period Check (4 AM – 9 AM IST): Block manual scans during 5-hour maintenance rest
+    import pytz
+    from datetime import datetime
+    IST = pytz.timezone('Asia/Kolkata')
+    now_ist = datetime.now(IST)
+    if 4 <= now_ist.hour < 9:
+        msg = """🔴 Bot is in Daily Rest Period (4 AM – 9 AM IST).
+
+Reason   : Daily 5-hour maintenance & liquidity sync
+Scanner  : Paused ⏸️
+Resumes  : 9:00 AM IST automatically ⏰"""
+        await update.message.reply_text(msg, reply_markup=get_main_keyboard())
+        return
 
     if "BTC" in text_upper and "DEBUG" not in text_upper:
         await execute_scan(update, "BTC/USDT")
@@ -462,12 +498,6 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
             await execute_debug(update, "BTC/USDT")
         else:
             await run_debug_all(update)
-    elif "STATUS" in text_upper:
-        await status(update, context)
-    elif text_upper.startswith("/STOP") or text_upper == "STOP":
-        await stop(update, context)
-    elif text_upper.startswith("/START") or text_upper == "START":
-        await start(update, context)
     elif text_upper.startswith("/SCAN") or text_upper.startswith("SCAN"):
         if text_upper.startswith("/SCAN"):
             raw_asset = cleaned[5:].strip()
@@ -475,6 +505,12 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
             raw_asset = cleaned[4:].strip()
         asset = normalize_asset(raw_asset) if raw_asset else "BTC/USDT"
         await execute_scan(update, asset)
+    elif text_upper.startswith("/CLEAR") or text_upper.startswith("/RESET"):
+        from app import active_trades
+        active_trades.clear()
+        await update.message.reply_text("🔄 Active trade locks cleared. Engine is ready for fresh setup entries.", reply_markup=get_main_keyboard())
+    elif text_upper.startswith("/WATCHLIST") or text_upper.startswith("WATCHLIST"):
+        await watchlist(update, context)
     elif text_upper.startswith("/CLEAR") or text_upper.startswith("/RESET"):
         from app import active_trades
         active_trades.clear()

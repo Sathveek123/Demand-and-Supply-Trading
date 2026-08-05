@@ -29,13 +29,26 @@ class TradingBotScheduler:
     def _run_loop(self):
         # Configure job to trigger scan for all configured assets
         def job():
-            from app import scan_asset, check_trade_outcomes, send_daily_summary
+            from app import (
+                scan_asset, check_trade_outcomes, send_daily_summary, 
+                send_weekly_summary, send_monthly_summary,
+                broadcast_online_status, broadcast_rest_status
+            )
             import app as app_mod
             from datetime import datetime
             import pytz
+            import calendar
             
             # Update last scan time
             app_mod.last_scan_time = time.time()
+
+            IST = pytz.timezone('Asia/Kolkata')
+            now_ist = datetime.now(IST)
+
+            # Rest period check: 4 AM to 9 AM IST (Daily maintenance & liquidity sync)
+            if 4 <= now_ist.hour < 9:
+                print(f"[SMC Scheduler]: Rest period active ({now_ist.strftime('%H:%M')} IST). Scanning paused until 9 AM IST.")
+                return
 
             # Check existing trades first
             try:
@@ -50,14 +63,28 @@ class TradingBotScheduler:
                 except Exception as e:
                     print(f"[SMC Scheduler]: Error scanning {asset}: {e}")
 
-            # Daily summary at 11:30 PM (23:30) IST
+            # Scheduled Notifications & Reports
             try:
-                IST = pytz.timezone('Asia/Kolkata')
-                now = datetime.now(IST)
-                if now.hour == 23 and now.minute == 30:
+                # 9:00 AM IST Online Broadcast
+                if now_ist.hour == 9 and 0 <= now_ist.minute < 3:
+                    broadcast_online_status()
+
+                # 4:00 AM IST Rest Period Broadcast
+                if now_ist.hour == 4 and 0 <= now_ist.minute < 3:
+                    broadcast_rest_status()
+
+                # 9:00 PM IST (21:00) Daily Summary
+                if now_ist.hour == 21 and 0 <= now_ist.minute < 3:
                     send_daily_summary()
+                    # Sunday 9 PM IST -> Weekly 7-Day Summary
+                    if now_ist.weekday() == 6:
+                        send_weekly_summary()
+                    # Last day of month 9 PM IST -> Monthly Summary
+                    last_day = calendar.monthrange(now_ist.year, now_ist.month)[1]
+                    if now_ist.day == last_day:
+                        send_monthly_summary()
             except Exception as e:
-                print(f"Error sending daily summary: {e}")
+                print(f"Error running scheduled reports: {e}")
 
         # Sync to actual candle close time (3M boundary)
         def wait_for_candle_close(timeframe_minutes=3):

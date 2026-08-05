@@ -266,10 +266,7 @@ Result     : +{pts_f} pts (1:2 RR)
 Trade closed. Full target reached ✅
 Next scan active 🔄"""
             telegram_bot.send_message(msg)
-            daily_results.append({
-                "asset": asset, "direction": direction,
-                "result": "WIN", "pts": pts
-            })
+            record_trade_outcome(asset, direction, "WIN", pts)
             active_trades[asset] = None   # clear
             print(f"[Outcome Checker]: {asset} TP2 HIT! Trade closed.")
 
@@ -299,40 +296,119 @@ Result     : -{pts_f} pts
 Trade closed. Waiting for next valid setup 🔄"""
             
             telegram_bot.send_message(msg)
-            daily_results.append({
-                "asset": asset, "direction": direction,
-                "result": "LOSS", "pts": pts if not trade["tp1_hit"] else 0.0
-            })
+            record_trade_outcome(asset, direction, "LOSS", pts if not trade["tp1_hit"] else 0.0)
             active_trades[asset] = None   # clear
             print(f"[Outcome Checker]: {asset} SL HIT! Trade closed.")
 
-def send_daily_summary():
-    if not daily_results:
-        return
+TRADE_HISTORY_FILE = "trade_history.json"
 
-    total = len(daily_results)
-    wins  = len([r for r in daily_results if r["result"] == "WIN"])
-    losses= total - wins
-    rate  = round((wins / total) * 100) if total > 0 else 0
+def load_trade_history() -> list:
+    if os.path.exists(TRADE_HISTORY_FILE):
+        try:
+            with open(TRADE_HISTORY_FILE, "r") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"[Trade History]: Error loading {TRADE_HISTORY_FILE}: {e}")
+    return []
+
+trade_history = load_trade_history()
+
+def record_trade_outcome(asset: str, direction: str, result: str, pts: float):
+    rec = {
+        "asset": asset,
+        "direction": direction,
+        "result": result, # WIN / LOSS
+        "pts": pts,
+        "timestamp": time.time(),
+        "date_str": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
+    }
+    trade_history.append(rec)
+    daily_results.append(rec)
+    try:
+        with open(TRADE_HISTORY_FILE, "w") as f:
+            json.dump(trade_history, f, indent=2)
+    except Exception as e:
+        print(f"[Trade History]: Error saving {TRADE_HISTORY_FILE}: {e}")
+
+def generate_report(trades: list, title: str) -> str:
+    if not trades:
+        return f"📊 {title}\n\nNo trades closed during this period."
+
+    total = len(trades)
+    wins = len([t for t in trades if t.get("result") == "WIN"])
+    losses = total - wins
+    win_rate = round((wins / total) * 100) if total > 0 else 0
+    net_pts = sum([t.get("pts", 0.0) if t.get("result") == "WIN" else -t.get("pts", 0.0) for t in trades])
+    net_pts_str = f"{net_pts:+,.2f}".rstrip('0').rstrip('.')
+
+    asset_lines = ""
+    for asset in settings.DEFAULT_ASSETS:
+        a_trades = [t for t in trades if t.get("asset") == asset]
+        if a_trades:
+            a_wins = len([t for t in a_trades if t.get("result") == "WIN"])
+            a_total = len(a_trades)
+            a_rate = round((a_wins / a_total) * 100)
+            asset_lines += f"\n• {asset} : {a_wins}/{a_total} Wins ({a_rate}%)"
 
     lines = ""
-    for r in daily_results:
+    for r in trades[-10:]:
         icon = "✅" if r["result"] == "WIN" else "❌"
         sign = "+" if r["result"] == "WIN" else "-"
         outcome_lbl = "TP2" if r["result"] == "WIN" else "SL"
         pts_str = f"{r['pts']:,}".rstrip('0').rstrip('.')
-        lines += f"\n{r['asset']} {r['direction']} → {outcome_lbl} {icon} {sign}{pts_str} pts"
+        lines += f"\n  {r['asset']} {r['direction']} → {outcome_lbl} {icon} {sign}{pts_str} pts"
 
-    msg = f"""📊 Daily Summary — {datetime.now(IST).strftime('%d-%m-%Y')}
+    msg = f"""📊 {title} — {datetime.now(IST).strftime('%d-%m-%Y')}
 
-Total Signals : {total}
-Wins          : {wins} ✅
-Losses        : {losses} ❌
-Win Rate      : {rate}%
-{lines}"""
+🏆 Performance Summary:
+Total Trades : {total}
+Wins         : {wins} ✅
+Losses       : {losses} ❌
+Win Rate     : {win_rate}% 🔥
+Net Result   : {net_pts_str} pts
 
+Asset Breakdown:{asset_lines if asset_lines else ' None'}
+
+Recent Closed Trades:{lines if lines else ' None'}"""
+    return msg
+
+def send_daily_summary():
+    now_ts = time.time()
+    one_day_ago = now_ts - (24 * 3600)
+    recent = [t for t in trade_history if t.get("timestamp", 0) >= one_day_ago]
+    msg = generate_report(recent, "Daily Performance Report (9 PM IST)")
     telegram_bot.send_message(msg)
-    daily_results.clear()   # reset for next day
+
+def send_weekly_summary():
+    now_ts = time.time()
+    seven_days_ago = now_ts - (7 * 24 * 3600)
+    recent = [t for t in trade_history if t.get("timestamp", 0) >= seven_days_ago]
+    msg = generate_report(recent, "Weekly 7-Day Performance Report")
+    telegram_bot.send_message(msg)
+
+def send_monthly_summary():
+    now_ts = time.time()
+    thirty_days_ago = now_ts - (30 * 24 * 3600)
+    recent = [t for t in trade_history if t.get("timestamp", 0) >= thirty_days_ago]
+    msg = generate_report(recent, f"Monthly Report ({datetime.now(IST).strftime('%B %Y')})")
+    telegram_bot.send_message(msg)
+
+def broadcast_online_status():
+    msg = """🤖 SMC Engine Online — Active & Scanning Setups (9 AM – 4 AM IST)
+Schedule : 9:00 AM – 4:00 AM IST (Daily Active)
+Scanning : BTC/USDT • ETH/USDT • XAUUSD • EURUSD
+Interval : Every 3M candle close
+
+Signals will fire automatically whenever a valid setup is detected! 📈"""
+    telegram_bot.send_message(msg)
+
+def broadcast_rest_status():
+    msg = """🔴 SMC Engine Daily Rest Period (4 AM – 9 AM IST)
+
+Reason   : Daily 5-hour maintenance & liquidity sync
+Scanner  : Paused ⏸️
+Resumes  : 9:00 AM IST automatically ⏰"""
+    telegram_bot.send_message(msg)
 
 # Cache for latest signals
 latest_signals: Dict[str, Any] = {}
