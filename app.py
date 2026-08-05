@@ -447,6 +447,22 @@ def scan_asset(asset: str = "BTC/USDT", send_telegram: bool = True):
         time.sleep(2.0)
         df_3m = fetcher.fetch_stock_candles(ticker=ticker, timeframe="3m", limit=100)
 
+    # Post-Fetch Identity Check (Stale Cache Guard)
+    # Detects if yfinance returned stale cached data (where 15M close == 3M close for crypto/metals)
+    if not df_15m.empty and not df_3m.empty and not ("EUR" in clean_asset):
+        close_15m = float(df_15m['close'].iloc[-1])
+        close_3m = float(df_3m['close'].iloc[-1])
+        if close_15m == close_3m and len(df_3m) >= 2 and close_3m == float(df_3m['close'].iloc[-2]):
+            print(f"[Cache Guard]: Stale data detected for {clean_asset} (15M close == 3M close: {close_3m:.4f}). Skipping scan.")
+            return {
+                "asset": clean_asset,
+                "valid_setup": False,
+                "reason": f"⏳ Stale data cache detected for {clean_asset}. Skipping scan.",
+                "analysis": {"valid": False, "reason": "STALE_CACHE_REJECTED", "asset": clean_asset},
+                "telegram_message": f"⏳ {clean_asset} — Stale Data\nReason : yfinance cache delay\nNext   : 3M candle close 🔄"
+            }
+
+
     # Fetch live entry price
     live_price = None
     try:

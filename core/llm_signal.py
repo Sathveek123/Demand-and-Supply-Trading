@@ -459,9 +459,12 @@ no_setup reasons:
         else:
             trigger_lbl = "OB Midpoint Close"
 
-        confidence_lbl = "🔥 HIGH" if confidence == "HIGH" else "⚡ MODERATE"
-
         entry_zone_str = data.get("entry_zone", f"{fmt_price(entry)}")
+
+        # Dynamic Checklist Ticks
+        trend_tick = "✅" if trend_15m in ["BULLISH", "BEARISH", "Bullish", "Bearish"] else "❌"
+        fvg_tick   = "✅" if data.get("has_fvg", True) else "❌"
+        conf_tick  = "✅" if data.get("confirmation") or confirmation != "NONE" else "❌"
 
         template = f"""╔══════════════════════╗
 ║{center_line(f"{direction_emoji}  •  {asset}", 22)}║
@@ -473,9 +476,9 @@ no_setup reasons:
 ⚡ Trigger      : {trigger_lbl}
 
 📋 Checklist:
-  • 15M Trend Alignment ✅
-  • 3M OB + FVG Confluence ✅
-  • Price Action Confirmation ✅
+  • 15M Trend Alignment {trend_tick}
+  • 3M OB + FVG Confluence {fvg_tick}
+  • Price Action Confirmation {conf_tick}
 
 🎯 Entry Zone  →  {entry_zone_str}
 🛑 SL          →  {fmt_price(sl)}  {sl_label}
@@ -487,4 +490,5 @@ no_setup reasons:
 ──────────────────────
 ⚠️ DYOR. Not financial advice."""
         return template
+
 
