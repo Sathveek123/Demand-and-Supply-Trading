@@ -492,7 +492,7 @@ class SMCEngine:
         # Scales SL buffer automatically for BTC ($63k), ETH ($1.8k), or SOL ($73)
         actual_sl_buffer = max(0.25 * atr_14, curr_price * 0.0015) if sl_buffer == 3.0 else sl_buffer
 
-        decimals = 4 if curr_price < 10 else 2
+        decimals = 4 if (curr_price < 50 or "EUR" in asset_name.upper()) else 2
         if trend_15m == "BULLISH":
             signal_type = "BUY"
             sl = round(ob_low - actual_sl_buffer, decimals)
@@ -507,20 +507,20 @@ class SMCEngine:
             tp2 = round(curr_price - (2.0 * risk), decimals)
 
         # Execution Zone Range
-        entry_min = round(curr_price - (0.1 * atr_14), 2)
-        entry_max = round(curr_price + (0.1 * atr_14), 2)
+        entry_min = round(curr_price - (0.1 * atr_14), decimals)
+        entry_max = round(curr_price + (0.1 * atr_14), decimals)
         entry_zone_str = f"{entry_min} – {entry_max}"
 
         # Position Sizing Hint ($10,000 Account risking 1% = $100 Risk)
-        risk_per_unit = max(abs(curr_price - sl), 0.01)
+        risk_per_unit = max(abs(curr_price - sl), 0.0001)
         rec_units = round(100.0 / risk_per_unit, 4)
         rec_leverage = min(10, max(1, round((rec_units * curr_price) / 10000.0)))
 
         confidence = cls.calculate_confidence("OB+FVG", conf_type, atr_14, best_fvg_dist, trend_method, bos_data)
         hold_time = cls.calculate_hold_time(risk, atr_14, conf_type)
         
-        # Unique deduplication key signature
-        ob_key = f"{asset_name}_{signal_type}_{ob_high:.2f}_{ob_low:.2f}_{active_ob.get('index', 0)}"
+        # Unique deduplication key signature with 5 decimals for precise forex/crypto zone tracking
+        ob_key = f"{asset_name}_{signal_type}_{ob_high:.5f}_{ob_low:.5f}_{active_ob.get('index', 0)}"
 
         return {
             "valid": True,
@@ -530,7 +530,7 @@ class SMCEngine:
             "trend_method": trend_method,
             "setup": "Order Block + FVG on 3M",
             "confirmation": conf_type,
-            "entry": round(curr_price, 2),
+            "entry": round(curr_price, decimals),
             "entry_zone": entry_zone_str,
             "stop_loss": sl,
             "tp1": tp1,
@@ -546,3 +546,4 @@ class SMCEngine:
             "rec_leverage": rec_leverage,
             "ob_key": ob_key
         }
+

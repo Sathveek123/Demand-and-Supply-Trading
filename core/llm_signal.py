@@ -370,7 +370,7 @@ no_setup reasons:
         if target_risk > 0:
             target_tp1 = (entry + target_risk) if direction == "BUY" else (entry - target_risk)
             target_tp2 = (entry + 2.0 * target_risk) if direction == "BUY" else (entry - 2.0 * target_risk)
-            dec_cnt = 4 if entry < 10 else 2
+            dec_cnt = 4 if (entry < 50 or "EUR" in asset.upper()) else 2
             tp1 = round(target_tp1, dec_cnt)
             tp2 = round(target_tp2, dec_cnt)
 
@@ -441,8 +441,11 @@ no_setup reasons:
 
         def fmt_price(val):
             if isinstance(val, (int, float)):
+                if abs(val) < 50 or "EUR" in asset.upper():
+                    return f"{val:,.4f}".rstrip('0').rstrip('.')
                 return f"{val:,.2f}".rstrip('0').rstrip('.')
             return str(val)
+
 
         direction_emoji = "🟢 BUY" if direction == "BUY" else "🔴 SELL"
         trend_label     = "Bullish" if direction == "BUY" else "Bearish"

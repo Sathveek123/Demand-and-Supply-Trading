@@ -402,6 +402,25 @@ def scan_asset(asset: str = "BTC/USDT", send_telegram: bool = True):
     """
     clean_asset = asset.upper().strip()
     
+    # EURUSD Off-Hours Guard (11:00 PM IST to 1:30 PM IST)
+    # Pause EURUSD scanning during dead overnight hours when low liquidity creates fake wicks
+    if "EUR" in clean_asset:
+        now_ist = datetime.now(IST)
+        hour = now_ist.hour
+        minute = now_ist.minute
+        # Off-hours: 23:00 to 23:59 or 00:00 to 13:29 IST
+        is_off_hours = (hour >= 23) or (hour < 13) or (hour == 13 and minute < 30)
+        if is_off_hours:
+            reason_msg = "⏳ EURUSD scanner paused during low-liquidity off-hours (11:00 PM – 1:30 PM IST). Resumes at London Open (1:30 PM IST)."
+            print(f"[EURUSD Filter]: Forex scanner paused for {clean_asset} (11:00 PM to 1:30 PM IST).")
+            return {
+                "asset": clean_asset,
+                "valid_setup": False,
+                "reason": reason_msg,
+                "analysis": {"valid": False, "reason": reason_msg, "asset": clean_asset},
+                "telegram_message": f"⏳ {clean_asset} — Off-Hours\nReason : Low liquidity 11 PM–1:30 PM IST\nNext   : London Open (1:30 PM IST) 🔄"
+            }
+
     # Check if asset is crypto, forex, commodity or stock/index
     if any(k in clean_asset for k in ["/", "USDT", "BTC", "ETH", "SOL", "XAU", "GOLD", "EUR"]):
         df_15m = fetcher.fetch_crypto_candles(symbol=clean_asset, timeframe="15m", limit=100)
@@ -437,7 +456,7 @@ def scan_asset(asset: str = "BTC/USDT", send_telegram: bool = True):
             skip_msg = f"""⛔ {clean_asset} — Signal Skipped
 Active {active_direction} trade still running.
 New {signal_type} setup ignored until trade closes."""
-            telegram_bot.send_message(skip_msg)
+            broadcast_signal(skip_msg)
             print(f"Signal blocked — {clean_asset} already in {active_direction}")
             return {
                 "asset": clean_asset,
@@ -447,15 +466,13 @@ New {signal_type} setup ignored until trade closes."""
                 "telegram_message": formatted_msg
             }
 
-        # Check duplicate setup check
-        raw_ob = analysis.get("raw_ob", {})
-        ob_key = (raw_ob.get("candle_index"), raw_ob.get("type"))
-        
+        # Check duplicate setup check (Uses price-level 5-decimal ob_key signature)
+        ob_key = analysis.get("ob_key")
         last_sent = last_sent_signals.get(clean_asset, {})
-        if last_sent.get("ob_key") == ob_key:
+        if ob_key and last_sent.get("ob_key") == ob_key:
             print(f"[SMC Scanner]: Signal for {clean_asset} OB at {ob_key} already sent. Skipping duplicate broadcast.")
         else:
-            telegram_bot.send_message(formatted_msg)
+            broadcast_signal(formatted_msg)
             save_active_trade(clean_asset, analysis)
             last_sent_signals[clean_asset] = {
                 "ob_key": ob_key,
@@ -468,6 +485,7 @@ New {signal_type} setup ignored until trade closes."""
         "analysis": analysis,
         "telegram_message": formatted_msg
     }
+
 
 @app.post("/api/webhook/tradingview")
 async def tradingview_webhook(request: Request):

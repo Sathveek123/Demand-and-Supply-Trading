@@ -73,8 +73,10 @@ class TradingBotScheduler:
             for asset in settings.DEFAULT_ASSETS:
                 try:
                     scan_asset(asset=asset, send_telegram=True)
+                    time.sleep(3.0)  # Gap between asset scans to prevent yfinance ticker cross-contamination
                 except Exception as e:
                     print(f"[SMC Scheduler]: Error scanning {asset}: {e}")
+
 
             # Scheduled Notifications & Reports (Strict 1-Time-Per-Day Guards)
             try:
