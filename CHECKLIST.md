@@ -3,8 +3,8 @@
 ## DATA LAYER
 - `[x]` yfinance fetch uses different period per TF
   - 15M → period="5d"  interval="15m"
-  - 3M  → period="1d"  interval="2m"
-- `[x]` random sleep 0.8–2.0s between TF fetches (prevents yfinance cache returning same data)
+  - 3M  → period="2d"  interval="2m"  *(2d avoids Yahoo Finance transient 'possibly delisted' bug)*
+- `[x]` random sleep 0.5–1.5s between retries (3 attempts with robust MultiIndex column flattening)
 - `[x]` Ticker.history fallback if yf.download rate-limits or glitches
 - `[x]` volume of last 3M candle checked FIRST (bypassed for Forex assets: EURUSD, GBPUSD)
 - `[x]` ATR calculated on 3M candles only (bounded within 0.00001 to 500.0)

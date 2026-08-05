@@ -54,30 +54,52 @@ class MarketDataFetcher:
     def _fetch_yf_candles(self, yf_symbol: str, timeframe: str = "3m", limit: int = 100) -> pd.DataFrame:
         """
         Core yfinance fetcher with retry loop and Ticker fallback to safeguard against Yahoo rate limits.
+        Uses period='2d' for intraday timeframes to avoid intermittent Yahoo 'possibly delisted' false-positives.
         """
         import random
         interval_map = {"3m": "2m", "15m": "15m", "5m": "5m", "1m": "1m", "1h": "60m"}
         interval = interval_map.get(timeframe, "2m")
-        period = "5d" if timeframe == "15m" else "1d"
+        # Use '2d' for 3M/5M intraday to avoid intermittent Yahoo Finance empty responses
+        period = "5d" if timeframe in ["15m", "1h"] else "2d"
 
-        for attempt in range(2):
+        def _flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
+            """Robustly flatten MultiIndex columns from yf.download reset_index."""
+            if isinstance(df.columns, pd.MultiIndex):
+                # After reset_index: ('Datetime','') -> 'datetime', ('Close','BTC-USD') -> 'close'
+                flat = []
+                for col in df.columns:
+                    if isinstance(col, tuple):
+                        # col[0] is the price type label
+                        label = str(col[0]).lower().strip()
+                        flat.append(label)
+                    else:
+                        flat.append(str(col).lower().strip())
+                df.columns = flat
+            else:
+                df.columns = [str(c).lower().strip() for c in df.columns]
+            return df
+
+        for attempt in range(3):
             try:
-                time.sleep(random.uniform(0.8, 2.0))
+                time.sleep(random.uniform(0.5, 1.5))
                 data = yf.download(tickers=yf_symbol, period=period, interval=interval, progress=False)
                 if not data.empty:
                     df = data.reset_index()
-                    if isinstance(df.columns, pd.MultiIndex):
-                        df.columns = [col[0].lower() for col in df.columns]
+                    df = _flatten_columns(df)
+                    # Normalize timestamp column name
+                    for ts_col in ['datetime', 'date', 'index']:
+                        if ts_col in df.columns:
+                            df.rename(columns={ts_col: 'timestamp'}, inplace=True)
+                            break
+                    needed = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+                    if all(c in df.columns for c in needed):
+                        df = df[needed].tail(limit).reset_index(drop=True)
+                        last_close = float(df['close'].iloc[-1])
+                        print(f"[RAW CHECK] {yf_symbol} {timeframe} last close = {last_close:.4f} (via yf.download)")
+                        return df
                     else:
-                        df.columns = [col.lower() for col in df.columns]
-                    if 'datetime' in df.columns:
-                        df.rename(columns={'datetime': 'timestamp'}, inplace=True)
-                    elif 'date' in df.columns:
-                        df.rename(columns={'date': 'timestamp'}, inplace=True)
-                    df = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']].tail(limit).reset_index(drop=True)
-                    last_close = float(df['close'].iloc[-1])
-                    print(f"[RAW CHECK] {yf_symbol} {timeframe} last close = {last_close:.4f} (via yf.download)")
-                    return df
+                        missing = [c for c in needed if c not in df.columns]
+                        print(f"[MarketDataFetcher]: yf.download missing columns {missing} for {yf_symbol}. Retrying...")
             except Exception as e:
                 print(f"[MarketDataFetcher]: yf.download attempt {attempt+1} error for {yf_symbol}: {e}")
 
@@ -88,15 +110,17 @@ class MarketDataFetcher:
             data = ticker_obj.history(period=period, interval=interval)
             if not data.empty:
                 df = data.reset_index()
-                df.columns = [col.lower() for col in df.columns]
-                if 'datetime' in df.columns:
-                    df.rename(columns={'datetime': 'timestamp'}, inplace=True)
-                elif 'date' in df.columns:
-                    df.rename(columns={'date': 'timestamp'}, inplace=True)
-                df = df[['timestamp', 'open', 'high', 'low', 'close', 'volume']].tail(limit).reset_index(drop=True)
-                last_close = float(df['close'].iloc[-1])
-                print(f"[RAW CHECK] {yf_symbol} {timeframe} last close = {last_close:.4f} (via Ticker.history fallback)")
-                return df
+                df.columns = [str(c).lower().strip() for c in df.columns]
+                for ts_col in ['datetime', 'date', 'index']:
+                    if ts_col in df.columns:
+                        df.rename(columns={ts_col: 'timestamp'}, inplace=True)
+                        break
+                needed = ['timestamp', 'open', 'high', 'low', 'close', 'volume']
+                if all(c in df.columns for c in needed):
+                    df = df[needed].tail(limit).reset_index(drop=True)
+                    last_close = float(df['close'].iloc[-1])
+                    print(f"[RAW CHECK] {yf_symbol} {timeframe} last close = {last_close:.4f} (via Ticker.history fallback)")
+                    return df
         except Exception as e:
             print(f"[MarketDataFetcher]: Ticker.history fallback error for {yf_symbol}: {e}")
 
