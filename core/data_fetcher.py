@@ -171,20 +171,45 @@ class MarketDataFetcher:
     def fetch_live_price(self, symbol: str) -> Optional[float]:
         """
         Fetches the real-time live price of the symbol via yfinance.
+        Uses fast_info first, falls back to yf.download last bar close.
         """
-        # Try yfinance first for crypto
+        yf_sym = self._symbol_to_yf(symbol)
+
+        # Method 1: fast_info (quickest but can be None on intermittent Yahoo issues)
         try:
-            yf_sym = self._symbol_to_yf(symbol)
-            ticker = yf.Ticker(yf_sym)
-            info = ticker.fast_info
-            price = getattr(info, 'last_price', None) or getattr(info, 'regularMarketPrice', None)
-            if price and float(price) > 0:
+            ticker_obj = yf.Ticker(yf_sym)
+            info = ticker_obj.fast_info
+            # Safely extract — info itself can be None or have None attributes
+            price = None
+            if info is not None:
+                price = getattr(info, 'last_price', None) or getattr(info, 'regularMarketPrice', None)
+            if price is not None and float(price) > 0:
                 print(f"[LIVE PRICE] {yf_sym} = {price:.4f} (via yfinance)")
                 return float(price)
         except Exception as e:
-            print(f"[MarketDataFetcher]: yfinance live price error for {symbol}: {e}")
+            print(f"[MarketDataFetcher]: yfinance fast_info error for {symbol}: {e}")
 
-        # Fallback: CCXT Bybit
+        # Method 2: yf.download last bar close (reliable fallback, always has data)
+        try:
+            data = yf.download(tickers=yf_sym, period="1d", interval="2m", progress=False)
+            if not data.empty:
+                # MultiIndex: ('Close', 'BTC-USD') or single-level 'Close'
+                if isinstance(data.columns, pd.MultiIndex):
+                    close_col = [c for c in data.columns if str(c[0]).lower() == 'close']
+                    if close_col:
+                        price = float(data[close_col[0]].iloc[-1])
+                    else:
+                        price = float(data.iloc[-1, 0])
+                else:
+                    close_cols = [c for c in data.columns if str(c).lower() == 'close']
+                    price = float(data[close_cols[0]].iloc[-1]) if close_cols else float(data.iloc[-1, 0])
+                if price > 0:
+                    print(f"[LIVE PRICE] {yf_sym} = {price:.4f} (via yf.download fallback)")
+                    return price
+        except Exception as e:
+            print(f"[MarketDataFetcher]: yf.download live price fallback error for {symbol}: {e}")
+
+
         if self.exchange is not None:
             try:
                 clean_symbol = symbol.upper().replace("-", "/").replace("_", "/")
