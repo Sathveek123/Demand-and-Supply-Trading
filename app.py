@@ -223,7 +223,7 @@ Result     : +{pts_f} pts (1:1 RR)
 
 Move SL to entry now.
 Remaining position targets TP2 → {tp2_f}"""
-            telegram_bot.send_message(msg)
+            broadcast_signal(msg)
             print(f"[Outcome Checker]: {asset} TP1 HIT! Moved SL to entry.")
 
         elif result == "TP2_HIT":
@@ -239,7 +239,7 @@ Result     : +{pts_f} pts (1:2 RR)
 
 Trade closed. Full target reached ✅
 Next scan active 🔄"""
-            telegram_bot.send_message(msg)
+            broadcast_signal(msg)
             record_trade_outcome(asset, direction, "WIN", pts)
             active_trades[asset] = None   # clear
             print(f"[Outcome Checker]: {asset} TP2 HIT! Trade closed.")
@@ -269,7 +269,7 @@ Result     : -{pts_f} pts
 
 Trade closed. Waiting for next valid setup 🔄"""
             
-            telegram_bot.send_message(msg)
+            broadcast_signal(msg)
             record_trade_outcome(asset, direction, "LOSS", pts if not trade["tp1_hit"] else 0.0)
             active_trades[asset] = None   # clear
             print(f"[Outcome Checker]: {asset} SL HIT! Trade closed.")
@@ -351,21 +351,21 @@ def send_daily_summary():
     one_day_ago = now_ts - (24 * 3600)
     recent = [t for t in trade_history if t.get("timestamp", 0) >= one_day_ago]
     msg = generate_report(recent, "Daily Performance Report (9 PM IST)")
-    telegram_bot.send_message(msg)
+    broadcast_signal(msg)
 
 def send_weekly_summary():
     now_ts = time.time()
     seven_days_ago = now_ts - (7 * 24 * 3600)
     recent = [t for t in trade_history if t.get("timestamp", 0) >= seven_days_ago]
     msg = generate_report(recent, "Weekly 7-Day Performance Report")
-    telegram_bot.send_message(msg)
+    broadcast_signal(msg)
 
 def send_monthly_summary():
     now_ts = time.time()
     thirty_days_ago = now_ts - (30 * 24 * 3600)
     recent = [t for t in trade_history if t.get("timestamp", 0) >= thirty_days_ago]
     msg = generate_report(recent, f"Monthly Report ({datetime.now(IST).strftime('%B %Y')})")
-    telegram_bot.send_message(msg)
+    broadcast_signal(msg)
 
 def broadcast_online_status():
     msg = """🤖 SMC Engine Online — Active & Scanning Setups (9 AM – 4 AM IST)
@@ -374,7 +374,7 @@ Scanning : BTC/USDT • ETH/USDT • XAUUSD • EURUSD
 Interval : Every 3M candle close
 
 Signals will fire automatically whenever a valid setup is detected! 📈"""
-    telegram_bot.send_message(msg)
+    broadcast_signal(msg)
 
 def broadcast_rest_status():
     msg = """🔴 SMC Engine Daily Rest Period (4 AM – 9 AM IST)
@@ -382,7 +382,7 @@ def broadcast_rest_status():
 Reason   : Daily 5-hour maintenance & liquidity sync
 Scanner  : Paused ⏸️
 Resumes  : 9:00 AM IST automatically ⏰"""
-    telegram_bot.send_message(msg)
+    broadcast_signal(msg)
 
 # Cache for latest signals
 latest_signals: Dict[str, Any] = {}

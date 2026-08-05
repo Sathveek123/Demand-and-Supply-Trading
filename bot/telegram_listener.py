@@ -521,12 +521,6 @@ Resumes  : 9:00 AM IST automatically ⏰"""
         await update.message.reply_text("🔄 Active trade locks cleared. Engine is ready for fresh setup entries.", reply_markup=get_main_keyboard())
     elif text_upper.startswith("/WATCHLIST") or text_upper.startswith("WATCHLIST"):
         await watchlist(update, context)
-    elif text_upper.startswith("/CLEAR") or text_upper.startswith("/RESET"):
-        from app import active_trades
-        active_trades.clear()
-        await update.message.reply_text("🔄 Active trade locks cleared. Engine is ready for fresh setup entries.", reply_markup=get_main_keyboard())
-    elif text_upper.startswith("/WATCHLIST") or text_upper.startswith("WATCHLIST"):
-        await watchlist(update, context)
     elif text_upper.startswith("/STATUS") or text_upper.startswith("STATUS"):
         await status(update, context)
 
