@@ -163,18 +163,6 @@ async def shutdown_event():
             await tg_application.shutdown()
         except Exception as e:
             print(f"[Telegram Bot]: Exception during application shutdown: {e}")
-            
-    # Send shutdown notification ONLY if server was up for > 10 seconds
-    # (avoids sending false offline notifications on failed startup / port collision)
-    if time.time() - start_time >= 10:
-        shutdown_msg = """🔴 SMC Engine Going Offline
-
-Reason  : Manual shutdown
-Trades  : Close any open positions manually
-Status  : Bot offline ⛔
-
-Restart with: python app.py"""
-        telegram_bot.send_message(shutdown_msg)
 
 def should_send_signal(asset, new_direction):
     if asset not in active_trades:
