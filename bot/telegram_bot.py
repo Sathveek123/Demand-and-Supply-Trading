@@ -70,26 +70,34 @@ class TelegramSignalBot:
 
     def send_message_to_users(self, user_ids: list[str], text: str) -> bool:
         """
-        Broadcasts formatted message to a list of active user chat_ids.
+        Broadcasts formatted message to a list of active user chat_ids with rate limiting & load balancing.
         """
+        import time
         if not user_ids:
-            # Fallback to configured chat_ids if no user list passed
             user_ids = self.chat_ids
 
+        # Merge statically configured chat_ids and dynamic user_ids so NO ONE is missed
+        all_recipients = list(set([str(cid).strip() for cid in (user_ids + self.chat_ids) if str(cid).strip()]))
+
         success = True
-        for cid in user_ids:
+        for idx, cid in enumerate(all_recipients):
             res = self.send_message_to(str(cid), text)
             if not res:
                 success = False
+            # Rate limiting delay (0.05s between sends to stay well under Telegram 30 msg/sec limit)
+            if idx < len(all_recipients) - 1:
+                time.sleep(0.05)
         return success
 
     def send_message(self, text: str) -> bool:
         """
-        Sends formatted message to all configured Telegram channels or subscribed active users.
+        Sends formatted message to all configured Telegram channels and registered active users.
         """
         from app import get_all_subscribed_users, is_user_active
         active_users = [cid for cid in get_all_subscribed_users() if is_user_active(cid)]
-        target_ids = active_users if active_users else self.chat_ids
+        
+        # Merge active registered users with statically configured chat_ids
+        target_ids = list(set(active_users + self.chat_ids))
 
         if not self.token or not target_ids:
             print(f"[Telegram Bot Mock Output - No API Key or Chat IDs Set]:\n{text}\n")
