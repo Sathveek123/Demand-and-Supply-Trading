@@ -461,6 +461,8 @@ no_setup reasons:
 
         confidence_lbl = "🔥 HIGH" if confidence == "HIGH" else "⚡ MODERATE"
 
+        entry_zone_str = data.get("entry_zone", f"{fmt_price(entry)}")
+
         template = f"""╔══════════════════════╗
 ║{center_line(f"{direction_emoji}  •  {asset}", 22)}║
 ╚══════════════════════╝
@@ -470,13 +472,19 @@ no_setup reasons:
 🧱 Zone         : {setup_lbl}
 ⚡ Trigger      : {trigger_lbl}
 
-🎯 Entry  →  {fmt_price(entry)}
-🛑 SL     →  {fmt_price(sl)}  {sl_label}
-💰 TP1    →  {fmt_price(tp1)}  (1:1 RR)
-💰 TP2    →  {fmt_price(tp2)}  (1:2 RR)
+📋 Checklist:
+  • 15M Trend Alignment ✅
+  • 3M OB + FVG Confluence ✅
+  • Price Action Confirmation ✅
+
+🎯 Entry Zone  →  {entry_zone_str}
+🛑 SL          →  {fmt_price(sl)}  {sl_label}
+💰 TP1         →  {fmt_price(tp1)}  (1:1 RR)
+💰 TP2         →  {fmt_price(tp2)}  (1:2 RR)
 
 ⏱ Hold        : {hold_time}
 📊 Confidence : {raw_confidence}
 ──────────────────────
 ⚠️ DYOR. Not financial advice."""
         return template
+

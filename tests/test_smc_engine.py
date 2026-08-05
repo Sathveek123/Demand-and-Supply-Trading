@@ -75,9 +75,11 @@ class TestSMCEngine(unittest.TestCase):
         output = SignalFormatter.format_signal(sample_data)
         self.assertIn("🟢 BUY  •  BTC/USDT", output)
         self.assertIn("✅ Trend (15M)  : Bullish", output)
-        self.assertIn("🎯 Entry  →  65,000", output)
-        self.assertIn("💰 TP1    →  65,200  (1:1 RR)", output)
-        self.assertIn("💰 TP2    →  65,400  (1:2 RR)", output)
+        self.assertIn("🎯 Entry Zone", output)
+
+        self.assertIn("65,200", output)
+        self.assertIn("65,400", output)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -402,17 +402,16 @@ def scan_asset(asset: str = "BTC/USDT", send_telegram: bool = True):
     """
     clean_asset = asset.upper().strip()
     
-    # EURUSD Off-Hours Guard (11:00 PM IST to 1:30 PM IST)
-    # Pause EURUSD scanning during dead overnight hours when low liquidity creates fake wicks
+    now_ist = datetime.now(IST)
+    hour = now_ist.hour
+    minute = now_ist.minute
+
+    # EURUSD Trading Hours Guard: 1:30 PM to 11:00 PM IST ONLY (London/NY overlap)
     if "EUR" in clean_asset:
-        now_ist = datetime.now(IST)
-        hour = now_ist.hour
-        minute = now_ist.minute
-        # Off-hours: 23:00 to 23:59 or 00:00 to 13:29 IST
         is_off_hours = (hour >= 23) or (hour < 13) or (hour == 13 and minute < 30)
         if is_off_hours:
-            reason_msg = "⏳ EURUSD scanner paused during low-liquidity off-hours (11:00 PM – 1:30 PM IST). Resumes at London Open (1:30 PM IST)."
-            print(f"[EURUSD Filter]: Forex scanner paused for {clean_asset} (11:00 PM to 1:30 PM IST).")
+            reason_msg = "⏳ EURUSD scanner paused during off-hours (11:00 PM – 1:30 PM IST). Resumes at London Open (1:30 PM IST)."
+            print(f"[Forex Hours Filter]: Paused for {clean_asset} (11:00 PM to 1:30 PM IST).")
             return {
                 "asset": clean_asset,
                 "valid_setup": False,
@@ -420,6 +419,21 @@ def scan_asset(asset: str = "BTC/USDT", send_telegram: bool = True):
                 "analysis": {"valid": False, "reason": reason_msg, "asset": clean_asset},
                 "telegram_message": f"⏳ {clean_asset} — Off-Hours\nReason : Low liquidity 11 PM–1:30 PM IST\nNext   : London Open (1:30 PM IST) 🔄"
             }
+
+    # GOLD (XAUUSD) Trading Hours Guard: 9:00 AM to 11:30 PM IST ONLY (US/London Metals Market)
+    if "XAU" in clean_asset or "GOLD" in clean_asset:
+        is_off_hours = (hour < 9) or (hour > 23) or (hour == 23 and minute >= 30)
+        if is_off_hours:
+            reason_msg = "⏳ GOLD scanner paused during metals off-market hours (11:30 PM – 9:00 AM IST). Resumes at 9:00 AM IST."
+            print(f"[Metals Hours Filter]: Paused for {clean_asset} (11:30 PM to 9:00 AM IST).")
+            return {
+                "asset": clean_asset,
+                "valid_setup": False,
+                "reason": reason_msg,
+                "analysis": {"valid": False, "reason": reason_msg, "asset": clean_asset},
+                "telegram_message": f"⏳ {clean_asset} — Off-Hours\nReason : Metals market off-hours (11:30 PM–9 AM IST)\nNext   : 9:00 AM IST 🔄"
+            }
+
 
     # Check if asset is crypto, forex, commodity or stock/index
     if any(k in clean_asset for k in ["/", "USDT", "BTC", "ETH", "SOL", "XAU", "GOLD", "EUR"]):

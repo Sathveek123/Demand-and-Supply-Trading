@@ -488,9 +488,14 @@ class SMCEngine:
         if live_price is not None and live_price > 0:
             curr_price = live_price
 
-        # Asset-Proportional ATR Scaled Buffer (Fix for hardcoded pip buffer)
-        # Scales SL buffer automatically for BTC ($63k), ETH ($1.8k), or SOL ($73)
-        actual_sl_buffer = max(0.25 * atr_14, curr_price * 0.0015) if sl_buffer == 3.0 else sl_buffer
+        # Asset-Proportional SL Buffer
+        # Forex (EURUSD): Fixed 0.0005 (5 pips) buffer beyond OB wick
+        # Crypto/Commodities: Dynamic ATR-scaled buffer
+        if is_forex:
+            actual_sl_buffer = 0.0005
+        else:
+            actual_sl_buffer = max(0.25 * atr_14, curr_price * 0.0015) if sl_buffer == 3.0 else sl_buffer
+
 
         decimals = 4 if (curr_price < 50 or "EUR" in asset_name.upper()) else 2
         if trend_15m == "BULLISH":
