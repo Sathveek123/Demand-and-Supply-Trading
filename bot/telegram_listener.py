@@ -431,6 +431,8 @@ Active trades:{trades_str}
 Next scan   : {next_scan_str}"""
     await update.message.reply_text(msg, reply_markup=get_main_keyboard())
 
+user_last_click: dict[str, float] = {}
+
 async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Intercept all text messages to catch spaced/unspaced commands and reply buttons gracefully."""
     if not update.message or not update.message.text:
@@ -442,6 +444,14 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
         set_user_state(chat_id, "ON")
 
     user_state = user_states.get(chat_id, "ON")
+
+    # Anti-Spam Guard: 3-second button cooldown per user
+    now_time = time.time()
+    last_click = user_last_click.get(chat_id, 0.0)
+    if now_time - last_click < 3.0:
+        await update.message.reply_text("⏳ Please wait 3 seconds before tapping another button.", reply_markup=get_main_keyboard())
+        return
+    user_last_click[chat_id] = now_time
 
     text = update.message.text.strip()
     

@@ -1,85 +1,66 @@
-# 🤖 SMC Pullback Strategy Engine v2.1
+# SMC Pullback Strategy Trading Bot v2.1 🤖📈
 
-A production-grade Smart Money Concepts (SMC) Trading Engine & Telegram Bot designed for high-probability pullback entries on crypto (`BTC/USDT`, `ETH/USDT`, `SOL/USDT`) and index markets.
-
----
-
-## ⚡ Core Engine Capabilities
-
-- **15M Market Structure Context**: Automatically computes Market Structure (Higher Highs / Higher Lows for BULLISH, Lower Highs / Lower Lows for BEARISH) or 50/200 EMA trend fallback.
-- **3M Order Block (OB) Detection**: Scans the last 30 3M candles for institutional supply/demand order blocks with an impulse validation threshold of $1.5 \times \text{ATR}_{3M}$.
-- **Fair Value Gap (FVG) Confluence**: Validates 3M FVGs requiring overlap or distance within $1.0 \times \text{ATR}_{3M}$ of the OB zone.
-- **2-Candle Price Action Confirmation**: Checks the last two 3M candles for high-confidence entry triggers (Engulfing patterns, Wick Rejection, or OB Midpoint closes).
-- **Dynamic SL / TP Ratios**:
-  - **SL**: Placed beyond the OB wick boundary (+ buffer).
-  - **TP1**: 1:1.5 Risk-to-Reward (50% position scale out + Move SL to Breakeven).
-  - **TP2**: 1:2.5+ Risk-to-Reward (Target runner).
-- **Volume Mid-Candle Guard**: Automatically skips mid-candle noise if volume $= 0$, outputting `CANDLE_NOT_CLOSED_YET`.
-- **yfinance Cache Bypass**: Eliminates cross-timeframe data pollution by introducing random micro-delays and clearing ticker history cache.
-- **Gemini Key Manager & Failover**: Rotates up to 3 Gemini API keys with automatic cooldown on 429 quota exhaustion, falling back smoothly to local formatting.
-- **Interactive Telegram Menu**: Persistent 6-button keyboard (`Scan BTC`, `Scan ETH`, `Scan SOL`, `Watchlist`, `Debug BTC`, `Status`).
-- **Outcome Tracker & Daily Reports**: Monitors active trades on candle closes and dispatches daily summary reports at 23:30 IST.
+An institutional-grade **Smart Money Concepts (SMC) Trading Engine** built with Python, FastAPI, and `python-telegram-bot`. Continuously monitors multi-asset price action (`BTC/USDT`, `ETH/USDT`, `XAUUSD`, `EURUSD`) on every 3-minute candle close to deliver high-probability trading signals with automated risk management and performance analytics.
 
 ---
 
-## 🛠️ Architecture & Setup
+## 🌟 Key Features
 
-### 1. Environment Setup
-Copy `.env.example` to `.env` and configure your keys:
-```ini
-TELEGRAM_BOT_TOKEN=8638277068:AAH2...
-TELEGRAM_CHAT_ID=7168024869
-GEMINI_API_KEYS=key1,key2,key3
-TELEGRAM_PROXY=
-TELEGRAM_WEBHOOK_URL=
+* **Multi-Asset SMC Engine**: Scans `BTC/USDT`, `ETH/USDT`, `XAUUSD` (Gold Futures `GC=F`), and `EURUSD` (`EURUSD=X`).
+* **15M Trend & 3M Entry Confluence**: Identifies 15M composite structural trend and locates unmitigated 3M Order Blocks (`Impulse > 1.5× ATR`) with Fair Value Gap (FVG) overlap.
+* **3-Tier Candle Confirmation**: Requires Engulfing, Wick Rejection, or Strong Body Close at OB zones before triggering signals.
+* **Precision Risk Management**: Dynamic Stop Loss with ATR-scaled buffers, Take Profit 1 @ 1:1 RR (Breakeven move), and Take Profit 2 @ 2:2 RR.
+* **Auto-Correcting TP Math**: Precision rounding math ensures 100% valid 1:1 and 1:2 Risk-to-Reward signals.
+* **Daily Operational Schedule**: Runs 9:00 AM – 4:00 AM IST (20 hours active scanning) with a 5-hour daily maintenance rest period (4:00 AM – 9:00 AM IST).
+* **Automated Performance Reports**:
+  * **Daily Report**: Broadcasts every night at 9:00 PM IST (Wins, Losses, Win Rate %, Net Result points).
+  * **Weekly Report**: Broadcasts every Sunday at 9:00 PM IST (7-Day Cumulative Analytics).
+  * **Monthly Report**: Broadcasts on the last day of every month at 9:00 PM IST.
+* **Multi-User Registry & Broadcasting**: Stores user subscriptions in `users.json` and broadcasts signals to all registered users with a `0.05s` rate-limiting safeguard.
+* **User Anti-Spam Guard**: Enforces a 3-second button cooldown to prevent user spamming.
+* **OFF State Guard**: Disables manual scan execution when a user turns the bot OFF (`/stop`).
+* **Silent Cloud Redeploys**: Removes false offline notifications on server restarts for 100% clean deployment.
+
+---
+
+## 📁 Repository Structure
+
+```
+├── app.py                     # Main FastAPI application server & scanner loop
+├── config.py                  # Environment settings & symbol configuration
+├── requirements.txt           # Dependency manifest for Render / Cloud deploy
+├── Procfile                   # Cloud process execution command
+├── users.json                 # Persistent multi-user subscription registry
+├── trade_history.json         # Persistent closed trade performance log
+├── bot/
+│   ├── telegram_bot.py        # Telegram signal broadcasting & rate-limiting client
+│   └── telegram_listener.py   # Event listener, interactive keyboard & command handlers
+├── core/
+│   ├── data_fetcher.py        # Resilient yfinance fetcher with Ticker fallback
+│   ├── smc_engine.py          # Core SMC strategy (OB, FVG, Trend, Confirmation)
+│   ├── llm_signal.py          # Signal payload formatter & Gemini LLM key manager
+│   └── scheduler.py           # 24/7 3M candle close scheduler & reporting engine
+├── docs/                      # Architectural & strategy documentation
+└── tests/                     # Unit test suite
 ```
 
-### 2. ISP Telegram Proxy Configuration (Optional)
-If your ISP blocks `api.telegram.org`:
+---
+
+## 🚀 Quick Setup & Deployment
+
+### Local Setup
 ```bash
-pip install pysocks
-```
-In `.env`:
-```ini
-TELEGRAM_PROXY=socks5://127.0.0.1:1080
-```
-
-### 3. Webhook vs Polling Mode
-- **Polling Mode (Default)**: Leave `TELEGRAM_WEBHOOK_URL` empty in `.env`.
-- **Webhook Mode (Production)**:
-  1. Launch ngrok: `ngrok http 8000`
-  2. Set `TELEGRAM_WEBHOOK_URL=https://<your-subdomain>.ngrok-free.app` in `.env`.
-
-### 4. Run Application
-```bash
+git clone https://github.com/Sathveek123/Demand-and-Supply-Trading.git
+cd "Demand-and-Supply-Trading"
+python -m venv venv
+venv\Scripts\activate  # Windows
+pip install -r requirements.txt
 python app.py
 ```
 
-### 5. Run Verification Tests
-```bash
-python -m unittest tests/test_smc_engine.py
-```
-
----
-
-## 📱 Telegram Commands & Controls
-
-| Command | Action |
-| :--- | :--- |
-| `/start` | Initializes interactive keyboard menu |
-| `/scan BTC` | Runs SMC strategy scan on BTC/USDT |
-| `/scan ETH` | Runs SMC strategy scan on ETH/USDT |
-| `/scan SOL` | Runs SMC strategy scan on SOL/USDT |
-| `/debug BTC` | Performs single-column raw calculation diagnostic truth test |
-| `/watchlist` | Shows current market prices & 15M trend statuses |
-| `/status` | Shows scheduler health, uptime, and next 3M close timer |
-
----
-
-## 📄 Documentation Directory
-Detailed strategy rules, architectural diagrams, and configuration guides are available in `/docs`:
-- [Strategy Rules & Math](file:///d:/Trading%20bots/Demand%20Supply%20Trading%20bot/docs/strategy_logic.md)
-- [System Architecture](file:///d:/Trading%20bots/Demand%20Supply%20Trading%20bot/docs/architecture.md)
-- [Signal Prompt & Format](file:///d:/Trading%20bots/Demand%20Supply%20Trading%20bot/docs/signal_logic.md)
-- [Setup Guide](file:///d:/Trading%20bots/Demand%20Supply%20Trading%20bot/docs/setup_guide.md)
-- [Project Overview](file:///d:/Trading%20bots/Demand%20Supply%20Trading%20bot/docs/project_documentation.md)
+### Deploy to Render
+1. Create a new **Web Service** on [Render](https://render.com).
+2. Connect your GitHub repository `Demand-and-Supply-Trading`.
+3. Set **Build Command**: `pip install -r requirements.txt`
+4. Set **Start Command**: `python app.py`
+5. Add Environment Variables (`TELEGRAM_BOT_TOKEN`, `GEMINI_API_KEY`, `TELEGRAM_CHAT_IDS`).
