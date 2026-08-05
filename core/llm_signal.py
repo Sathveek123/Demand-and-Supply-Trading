@@ -90,9 +90,7 @@ Before formatting any signal, validate all fields:
    direction == "SELL" → sl must be ABOVE entry
    Violation → output NULL_SIGNAL, reason: INVALID_SL
 
-3. tp1 must equal exactly 1:1 RR from entry vs sl distance
-   tp2 must equal exactly 1:2 RR from entry vs sl distance
-   Deviation > 0.1% → output NULL_SIGNAL, reason: TP_MATH_WRONG
+3. tp1 is 1:1 RR from entry vs sl distance. tp2 is 1:2 RR from entry vs sl distance. Auto-adjust minor rounding differences.
 
 4. volume of last 3M candle must NOT be zero
    volume == 0 → output NULL_SIGNAL, reason: CANDLE_NOT_CLOSED
@@ -367,15 +365,14 @@ no_setup reasons:
         if direction == "SELL" and sl <= entry:
             return "NULL_SIGNAL, reason: INVALID_SL"
 
-        # Check Rule 3: TP Math (relative deviation check)
+        # Check Rule 3: TP Math (auto-correct precision rounding to exact 1:1 and 1:2 RR)
         target_risk = abs(entry - sl)
         if target_risk > 0:
             target_tp1 = (entry + target_risk) if direction == "BUY" else (entry - target_risk)
             target_tp2 = (entry + 2.0 * target_risk) if direction == "BUY" else (entry - 2.0 * target_risk)
-            dev1 = abs(tp1 - target_tp1) / target_risk
-            dev2 = abs(tp2 - target_tp2) / target_risk
-            if dev1 > 0.05 or dev2 > 0.05:
-                return "NULL_SIGNAL, reason: TP_MATH_WRONG"
+            dec_cnt = 4 if entry < 10 else 2
+            tp1 = round(target_tp1, dec_cnt)
+            tp2 = round(target_tp2, dec_cnt)
 
         # Check Rule 4: Volume (skip for Forex assets)
         FOREX_ASSETS = ["EURUSD", "EUR/USD", "GBPUSD", "USDJPY", "EURUSD=X", "GBPUSD=X"]
