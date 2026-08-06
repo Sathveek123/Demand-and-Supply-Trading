@@ -13,6 +13,7 @@ class TradingBotScheduler:
     def __init__(self):
         self.running = False
         self.loop_thread = None
+        self.last_heartbeat = 0.0   # Updated every loop cycle — used by /status as ground truth
         self.last_online_date = ""
         self.last_rest_date = ""
         self.last_daily_report_date = ""
@@ -116,14 +117,23 @@ class TradingBotScheduler:
         # Main execution loop
         while self.running:
             try:
+                # Update heartbeat before sleeping so /status sees it as alive immediately
+                self.last_heartbeat = time.time()
+
                 # Sync to actual 3M boundary before each scan
                 wait_for_candle_close(timeframe_minutes=3)
-                
+
+                # Update heartbeat again after waking up from sleep
+                self.last_heartbeat = time.time()
+
                 # Execute candle close check scan
                 job()
             except Exception as e:
                 print(f"[SMC Scheduler Critical Guard]: Unhandled loop error: {e}")
-            
+
+            # Update heartbeat after job completes
+            self.last_heartbeat = time.time()
+
             # Sleep 10 seconds to step past current block boundaries cleanly
             time.sleep(10)
 
