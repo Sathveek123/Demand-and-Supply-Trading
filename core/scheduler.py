@@ -2,6 +2,7 @@ import asyncio
 import schedule
 import time
 import threading
+import state as bot_state
 from config import settings
 
 class TradingBotScheduler:
@@ -25,6 +26,7 @@ class TradingBotScheduler:
         Starts checking background thread.
         """
         self.running = True
+        bot_state.mark_scheduler_started()   # Mark started in shared state
         self.loop_thread = threading.Thread(target=self._run_loop, daemon=True)
         self.loop_thread.start()
         print("[SMC Scheduler]: Running. Checking for 3M candle closes...")
@@ -117,22 +119,25 @@ class TradingBotScheduler:
         # Main execution loop
         while self.running:
             try:
-                # Update heartbeat before sleeping so /status sees it as alive immediately
+                # Heartbeat: mark alive immediately so /status sees Running right away
                 self.last_heartbeat = time.time()
+                bot_state.mark_scheduler_heartbeat()
 
                 # Sync to actual 3M boundary before each scan
                 wait_for_candle_close(timeframe_minutes=3)
 
-                # Update heartbeat again after waking up from sleep
+                # Heartbeat again after waking from long sleep
                 self.last_heartbeat = time.time()
+                bot_state.mark_scheduler_heartbeat()
 
                 # Execute candle close check scan
                 job()
             except Exception as e:
                 print(f"[SMC Scheduler Critical Guard]: Unhandled loop error: {e}")
 
-            # Update heartbeat after job completes
+            # Heartbeat after job completes
             self.last_heartbeat = time.time()
+            bot_state.mark_scheduler_heartbeat()
 
             # Sleep 10 seconds to step past current block boundaries cleanly
             time.sleep(10)

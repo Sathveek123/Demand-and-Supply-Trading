@@ -380,11 +380,10 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show active bot status metrics."""
     import time
     import pytz
+    import state as bot_state
     import app as app_mod
     active_trades = getattr(app_mod, 'active_trades', {})
     start_time = getattr(app_mod, 'start_time', time.time())
-    scheduler_obj = getattr(app_mod, 'scheduler', None)
-
 
     IST = pytz.timezone('Asia/Kolkata')
 
@@ -400,25 +399,9 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     next_scan_dt = datetime.fromtimestamp(next_scan_ts, IST)
     next_scan_str = next_scan_dt.strftime("%H:%M IST")
 
-    # Primary truth: scheduler.last_heartbeat is updated every loop cycle.
-    # If it was set within the last 5 minutes, the scheduler is definitely running.
-    # Falls back to loop_thread.is_alive() and .running flag for freshly-started bots.
-    is_running = False
-    if scheduler_obj:
-        last_hb = getattr(scheduler_obj, 'last_heartbeat', 0.0)
-        if last_hb > 0 and (time.time() - last_hb) < 300:
-            # Heartbeat seen within last 5 minutes — scheduler is alive
-            is_running = True
-        else:
-            # Fallback: check if the background thread is alive
-            loop_thread = getattr(scheduler_obj, 'loop_thread', None)
-            if loop_thread and loop_thread.is_alive():
-                is_running = True
-            elif getattr(scheduler_obj, 'running', False):
-                is_running = True
-    sched_status = "✅ Running" if is_running else "❌ Stopped"
+    # Use shared state singleton — reliable across threads, no import-chain races
+    sched_status = "✅ Running" if bot_state.is_scheduler_alive() else "❌ Stopped"
 
-    
     trades_str = ""
     for asset in settings.DEFAULT_ASSETS:
         trade = active_trades.get(asset)
@@ -445,6 +428,7 @@ Active trades:{trades_str}
 
 Next scan   : {next_scan_str}"""
     await update.message.reply_text(msg, reply_markup=get_main_keyboard())
+
 
 user_last_click: dict[str, float] = {}
 
