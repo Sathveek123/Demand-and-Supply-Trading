@@ -567,28 +567,64 @@ def init_telegram_app() -> Application:
     
     return application
 
+async def _run_polling_async(application):
+    """
+    Thread-safe async polling loop.
+    Uses application.initialize() + updater.start_polling() + application.start()
+    instead of application.run_polling() which installs OS signal handlers
+    (only allowed on the main thread — crashes on Render background threads).
+    """
+    import asyncio
+    await application.initialize()
+    await application.updater.start_polling(drop_pending_updates=True)
+    await application.start()
+    print("[Telegram Bot]: Polling started (thread-safe mode).")
+    # Keep the loop alive indefinitely — this blocks until the task is cancelled
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    except asyncio.CancelledError:
+        pass
+    finally:
+        print("[Telegram Bot]: Stopping polling...")
+        await application.updater.stop()
+        await application.stop()
+        await application.shutdown()
+
+
 def run_telegram_listener():
-    """Start the Telegram update polling listener with local asyncio loop context and automatic retry wrapper."""
+    """
+    Start the Telegram update polling listener.
+    Uses a dedicated asyncio event loop per thread.
+    Does NOT use application.run_polling() — that method installs OS signal
+    handlers via set_wakeup_fd() which only works on the main OS thread,
+    causing crashes when called from a daemon thread (e.g. on Render).
+    """
     if not settings.TELEGRAM_BOT_TOKEN:
         print("[Telegram Bot]: Cannot run listener: No TELEGRAM_BOT_TOKEN set.")
         return
 
     import time
+    import asyncio
     while True:
+        loop = None
         try:
             print("[Telegram Bot]: Starting Event Listener...")
-            import asyncio
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-
             application = init_telegram_app()
-
-            # Run bot polling in blocking block inside loop
-            application.run_polling()
-            break
+            loop.run_until_complete(_run_polling_async(application))
+            break  # clean exit
         except Exception as e:
             print(f"[Telegram Bot]: Connection error: {e}. Retrying listener in 10 seconds...")
             time.sleep(10)
+        finally:
+            if loop and not loop.is_closed():
+                try:
+                    loop.close()
+                except Exception:
+                    pass
 
 if __name__ == "__main__":
     run_telegram_listener()
+

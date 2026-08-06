@@ -1,0 +1,18 @@
+[
+  {
+    "asset": "ETH/USDT",
+    "direction": "BUY",
+    "result": "LOSS",
+    "pts": 0.0,
+    "timestamp": 1785963815.1743119,
+    "date_str": "2026-08-06 02:33:35"
+  },
+  {
+    "asset": "BTC/USDT",
+    "direction": "BUY",
+    "result": "LOSS",
+    "pts": 108.11,
+    "timestamp": 1785963993.6741097,
+    "date_str": "2026-08-06 02:36:33"
+  }
+]
