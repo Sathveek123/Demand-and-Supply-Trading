@@ -239,7 +239,7 @@ Result     : +{pts_f} pts (1:2 RR)
 Trade closed. Full target reached ✅
 Next scan active 🔄"""
             broadcast_signal(msg)
-            record_trade_outcome(asset, direction, "WIN", pts)
+            record_trade_outcome(asset, direction, "WIN", pts, trade)
             active_trades[asset] = None   # clear
             print(f"[Outcome Checker]: {asset} TP2 HIT! Trade closed.")
 
@@ -269,7 +269,7 @@ Result     : -{pts_f} pts
 Trade closed. Waiting for next valid setup 🔄"""
             
             broadcast_signal(msg)
-            record_trade_outcome(asset, direction, "LOSS", pts if not trade["tp1_hit"] else 0.0)
+            record_trade_outcome(asset, direction, "LOSS", pts if not trade["tp1_hit"] else 0.0, trade)
             active_trades[asset] = None   # clear
             print(f"[Outcome Checker]: {asset} SL HIT! Trade closed.")
 
@@ -286,14 +286,20 @@ def load_trade_history() -> list:
 
 trade_history = load_trade_history()
 
-def record_trade_outcome(asset: str, direction: str, result: str, pts: float):
+def record_trade_outcome(asset: str, direction: str, result: str, pts: float, trade: dict = None):
     rec = {
         "asset": asset,
         "direction": direction,
-        "result": result, # WIN / LOSS
+        "result": result,      # WIN / LOSS
         "pts": pts,
         "timestamp": time.time(),
-        "date_str": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
+        "date_str": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S"),
+        # Full trade details (if trade object provided)
+        "entry":      trade.get("entry", None)    if trade else None,
+        "sl":         trade.get("sl", None)       if trade else None,
+        "tp1":        trade.get("tp1", None)      if trade else None,
+        "tp2":        trade.get("tp2", None)      if trade else None,
+        "open_time":  trade.get("open_time", None) if trade else None,
     }
     trade_history.append(rec)
     daily_results.append(rec)
@@ -558,7 +564,33 @@ async def tradingview_webhook(request: Request):
         print(f"[TradingView Webhook]: Error processing webhook: {e}")
         return JSONResponse(status_code=400, content={"status": "error", "message": str(e)})
 
-@app.post("/telegram/webhook")
+@app.get("/api/trade-history")
+async def get_trade_history():
+    """Returns all closed trade records from trade_history.json on the live server."""
+    total = len(trade_history)
+    wins  = sum(1 for t in trade_history if t.get("result") == "WIN")
+    losses = total - wins
+    win_rate = round((wins / total) * 100, 1) if total > 0 else 0
+    net_pts = sum(
+        t.get("pts", 0) if t.get("result") == "WIN" else -t.get("pts", 0)
+        for t in trade_history
+    )
+    return {
+        "summary": {
+            "total_trades": total,
+            "wins": wins,
+            "losses": losses,
+            "win_rate_pct": win_rate,
+            "net_pts": round(net_pts, 2),
+        },
+        "active_trades": {
+            k: v for k, v in active_trades.items() if v is not None
+        },
+        "history": trade_history
+    }
+
+
+@app.post(\"/telegram/webhook\")
 async def telegram_webhook(request: Request):
     """
     Webhook endpoint to receive updates pushed from Telegram.

@@ -19,11 +19,12 @@ logger = logging.getLogger(__name__)
 fetcher = MarketDataFetcher()
 
 def get_main_keyboard() -> ReplyKeyboardMarkup:
-    """Return the persistent menu keyboard layout with 6 specified buttons."""
+    """Return the persistent menu keyboard layout with 7 specified buttons."""
     keyboard = [
         [KeyboardButton("📊 BTC/USDT"), KeyboardButton("📊 ETH/USDT")],
         [KeyboardButton("📊 GOLD"), KeyboardButton("📊 EUR/USD")],
-        [KeyboardButton("⚙️ STATUS"), KeyboardButton("🧪 DEBUG ALL")]
+        [KeyboardButton("⚙️ STATUS"), KeyboardButton("📈 HISTORY")],
+        [KeyboardButton("🧪 DEBUG ALL")]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
 
@@ -376,6 +377,64 @@ async def run_debug_all(update: Update) -> None:
     for asset in ["BTC/USDT", "ETH/USDT", "XAUUSD", "EURUSD"]:
         await execute_debug(update, asset)
 
+async def history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show full trade history and performance analytics from trade_history.json on the server."""
+    import app as app_mod
+    import time
+    trades = getattr(app_mod, 'trade_history', [])
+    active = {k: v for k, v in getattr(app_mod, 'active_trades', {}).items() if v}
+
+    total  = len(trades)
+    wins   = sum(1 for t in trades if t.get('result') == 'WIN')
+    losses = total - wins
+    win_rate = round((wins / total) * 100, 1) if total > 0 else 0
+    net_pts = sum(
+        t.get('pts', 0) if t.get('result') == 'WIN' else -t.get('pts', 0)
+        for t in trades
+    )
+
+    # Per-asset breakdown
+    asset_lines = ""
+    for asset in ["BTC/USDT", "ETH/USDT", "XAUUSD", "EURUSD"]:
+        a = [t for t in trades if t.get('asset') == asset]
+        if a:
+            aw = sum(1 for t in a if t.get('result') == 'WIN')
+            ar = round((aw / len(a)) * 100)
+            asset_lines += f"\n  {asset:<10}: {aw}/{len(a)} W ({ar}%)"
+
+    # Last 10 closed trades
+    recent_lines = ""
+    for r in trades[-10:]:
+        icon = "✅" if r['result'] == 'WIN' else "❌"
+        sign = "+" if r['result'] == 'WIN' else "-"
+        pts_str = f"{r.get('pts', 0):.2f}"
+        entry_str = f" @ {r['entry']}" if r.get('entry') else ""
+        recent_lines += f"\n  {r['date_str'][-5:]} {r['asset']} {r['direction']}{entry_str} → {icon} {sign}{pts_str}"
+
+    # Active trades
+    active_lines = ""
+    for asset, t in active.items():
+        active_lines += f"\n  {asset}: {t['direction']} @ {t['entry']} | SL {t['sl']} | TP1 {t['tp1']} | TP2 {t['tp2']} (since {t.get('open_time','?')})"
+
+    msg = f"""📈 Trade History — All Time
+
+🏆 Summary:
+  Total    : {total} trades
+  Wins     : {wins} ✅
+  Losses   : {losses} ❌
+  Win Rate : {win_rate}%
+  Net Pts  : {'+' if net_pts >= 0 else ''}{net_pts:.2f} pts
+
+📊 Asset Breakdown:{asset_lines if asset_lines else chr(10) + '  No closed trades yet.'}
+
+🔴 Active Trades:{active_lines if active_lines else chr(10) + '  None'}
+
+📋 Last 10 Closed:{recent_lines if recent_lines else chr(10) + '  No trades yet.'}
+
+⚡ Live data: https://demand-and-supply-trading.onrender.com/api/trade-history"""
+    await update.message.reply_text(msg, reply_markup=get_main_keyboard())
+
+
 async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show active bot status metrics."""
     import time
@@ -470,6 +529,9 @@ async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif text_upper.startswith("/STATUS") or text_upper == "STATUS" or "STATUS" in text_upper:
         await status(update, context)
         return
+    elif text_upper.startswith("/HISTORY") or text_upper == "HISTORY" or "HISTORY" in text_upper:
+        await history(update, context)
+        return
 
     # User OFF State Guard: If user turned bot OFF, block all manual scan buttons!
     if user_state == "OFF":
@@ -560,6 +622,7 @@ def init_telegram_app() -> Application:
     application.add_handler(CommandHandler("scan", scan))
     application.add_handler(CommandHandler("debug", debug))
     application.add_handler(CommandHandler("status", status))
+    application.add_handler(CommandHandler("history", history))
     application.add_handler(CommandHandler("watchlist", watchlist))
     application.add_handler(MessageHandler(filters.TEXT, handle_all_messages))
     
