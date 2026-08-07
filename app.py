@@ -646,7 +646,7 @@ async def get_trade_history():
     }
 
 
-@app.post(\"/telegram/webhook\")
+@app.post("/telegram/webhook")
 async def telegram_webhook(request: Request):
     """
     Webhook endpoint to receive updates pushed from Telegram.
