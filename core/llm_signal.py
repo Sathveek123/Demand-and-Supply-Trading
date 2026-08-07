@@ -304,32 +304,12 @@ no_setup reasons:
             elif "ATR_UNREALISTIC" in reason:
                 reason_lbl = "Data quality issue, skipping"
 
-            # Use LLM formatting for No Setup if enabled and Gemini API Key is set
-            if settings.USE_LLM_FORMATTER and settings.GEMINI_API_KEY:
-                while True:
-                    api_key = GeminiKeyManager.get_working_key()
-                    if not api_key:
-                        break
-                    try:
-                        client = genai.Client(api_key=api_key)
-                        input_payload = {
-                            "asset": data.get("asset", "BTC/USDT"),
-                            "signal": "NONE",
-                            "reason": reason_lbl,
-                            "timestamp": timestamp_str
-                        }
-                        response = client.models.generate_content(
-                            model="gemini-2.0-flash",
-                            contents=f"{SignalFormatter.SYSTEM_PROMPT}\n\nFormat this signal: {json.dumps(input_payload)}"
-                        )
-                        return response.text.strip()
-                    except Exception as e:
-                        err_msg = str(e)
-                        is_daily = "RESOURCE_EXHAUSTED" in err_msg or "Quota exceeded" in err_msg or "429" in err_msg
-                        GeminiKeyManager.blacklist_key(api_key, is_daily_quota=is_daily)
-                        print(f"[LLM Formatter]: API Key failed: {e}. Retrying next key...")
-
+            # NO SETUP messages: always use local template — NEVER call Gemini for these.
+            # Reason: Gemini was being called every 3 minutes × 4 assets = 480 calls/hour
+            # = 11,520 calls/day → all 3 free-tier keys exhausted in < 9 hours.
+            # The local template below is perfectly sufficient for No Setup notifications.
             return f"⏳ {data.get('asset', 'BTC/USDT')} — No Setup\nReason : {reason_lbl}\nNext   : 3M candle close 🔄"
+
 
         # 1. Input Contract Validation Rules
         asset = data.get("asset", "BTC/USDT")

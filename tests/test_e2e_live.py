@@ -3,6 +3,14 @@ Full end-to-end live validation — all 4 assets.
 Tests: data fetcher → SMC engine → signal formatter → output
 """
 import sys, os
+import io
+
+# Force UTF-8 output — Windows defaults to cp1252 which crashes on emoji in print statements
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import time
@@ -20,9 +28,9 @@ print("=" * 60)
 all_ok = True
 
 for asset in ASSETS:
-    print(f"\n{'─'*50}")
+    print(f"\n{'-'*50}")
     print(f"  ASSET: {asset}")
-    print(f"{'─'*50}")
+    print(f"{'-'*50}")
     
     try:
         # Step 1: Fetch candles
