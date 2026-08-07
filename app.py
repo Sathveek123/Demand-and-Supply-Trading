@@ -505,7 +505,8 @@ def scan_asset(asset: str = "BTC/USDT", send_telegram: bool = True):
     # Check if asset is crypto, forex, commodity or stock/index
     if any(k in clean_asset for k in ["/", "USDT", "BTC", "ETH", "SOL", "XAU", "GOLD", "EUR"]):
         df_15m = fetcher.fetch_crypto_candles(symbol=clean_asset, timeframe="15m", limit=100)
-        time.sleep(2.0)
+        eth_sleep = 3.0 if "ETH" in clean_asset.upper() else 2.0  # ETH needs longer gap to bust cache
+        time.sleep(eth_sleep)
         df_3m = fetcher.fetch_crypto_candles(symbol=clean_asset, timeframe="3m", limit=100)
     else:
         # Map ticker query cleanups
