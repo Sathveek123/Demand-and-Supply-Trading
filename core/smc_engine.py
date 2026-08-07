@@ -178,7 +178,7 @@ class SMCEngine:
         
         # Calculate 20-candle average volume baseline
         avg_vol = np.mean(volumes) if len(volumes) > 0 else 1.0
-        impulse_threshold = 1.5 * atr
+        impulse_threshold = 2.0 * atr
 
         for i in range(1, len(subset) - 1):
             move = abs(closes[i + 1] - closes[i])
@@ -310,13 +310,13 @@ class SMCEngine:
             if taps_ob and c_body > 0 and upper_wick > 1.5 * c_body:
                 return True, "Bearish Wick Rejection at OB Zone"
 
-        # 3. OB Midpoint Close (Requires volume verification)
-        ob_mid = active_ob.get("mid", active_ob.get("midpoint", 0.0))
-        if c_vol >= 0.8 * avg_vol_10:
-            if trend == "BULLISH" and c["close"] > ob_mid:
-                return True, "Close above OB Midpoint"
-            if trend == "BEARISH" and c["close"] < ob_mid:
-                return True, "Close below OB Midpoint"
+        # 3. OB Midpoint Close (Requires volume verification) - DISABLED
+        # ob_mid = active_ob.get("mid", active_ob.get("midpoint", 0.0))
+        # if c_vol >= 0.8 * avg_vol_10:
+        #     if trend == "BULLISH" and c["close"] > ob_mid:
+        #         return True, "Close above OB Midpoint"
+        #     if trend == "BEARISH" and c["close"] < ob_mid:
+        #         return True, "Close below OB Midpoint"
 
         return False, "Waiting for confirmation at OB zone"
 
@@ -370,6 +370,22 @@ class SMCEngine:
             elif ratio < 2:  return "35–60 min"
             else:            return "60–90 min"
 
+    @staticmethod
+    def is_trending_market(df_15m: pd.DataFrame, atr: float) -> bool:
+        """
+        Checks if the 15M market is trending vs ranging (ATR compression).
+        Compares the latest 15M candle range to its 20-period average.
+        """
+        if len(df_15m) < 20:
+            return True
+        atr_series = df_15m["high"] - df_15m["low"]
+        avg_atr = atr_series.rolling(20).mean().iloc[-1]
+        latest_range = df_15m["high"].iloc[-1] - df_15m["low"].iloc[-1]
+        
+        if latest_range < (avg_atr * 0.6):
+            return False  # Ranging — ATR compressed
+        return True  # Trending — ATR expanding
+
     @classmethod
     def analyze_setup(cls, asset_name: str, df_15m: pd.DataFrame, df_3m: pd.DataFrame, sl_buffer: float = 3.0, live_price: float = None) -> Dict[str, Any]:
         """
@@ -408,6 +424,14 @@ class SMCEngine:
             return {
                 "valid": False,
                 "reason": "ATR_UNREALISTIC_DATA_BUG",
+                "asset": asset_name
+            }
+
+        # Market Condition Filter: Ranging market check
+        if not cls.is_trending_market(df_15m, atr_14):
+            return {
+                "valid": False,
+                "reason": "⏳ RANGING_MARKET — ATR compressed. Waiting for trend.",
                 "asset": asset_name
             }
 

@@ -35,6 +35,7 @@ async def lifespan(app_instance):
     """FastAPI lifespan handler — runs startup logic, then yields, then shutdown logic."""
     # ── STARTUP ──
     scheduler.start()
+    load_active_trades()  # Restore active trades from file
 
     # Keep-Alive self-pinger: prevents Render free-tier spin-down after 15 min inactivity
     start_keep_alive()
@@ -100,7 +101,20 @@ last_scan_time = time.time()
 import json
 import os
 
-USER_FILE = "users.json"
+DATA_PATH = os.getenv("DATA_PATH", "")
+if DATA_PATH and not DATA_PATH.endswith("/"):
+    DATA_PATH += "/"
+
+# Auto-create data directory if specified and not exists (e.g. Render mount)
+if DATA_PATH and not os.path.exists(DATA_PATH):
+    try:
+        os.makedirs(DATA_PATH, exist_ok=True)
+    except Exception as e:
+        print(f"[Storage Guide]: Error creating directory {DATA_PATH}: {e}")
+
+USER_FILE = DATA_PATH + "users.json"
+ACTIVE_TRADES_FILE = DATA_PATH + "active_trades.json"
+TRADE_HISTORY_FILE = DATA_PATH + "trade_history.json"
 
 def load_users():
     if os.path.exists(USER_FILE):
@@ -130,6 +144,33 @@ def set_user_state(chat_id: str, state: str):
 def get_all_subscribed_users() -> list[str]:
     return list(user_states.keys())
 
+# Active trades dictionary
+active_trades = {
+    "BTC/USDT": None,
+    "ETH/USDT": None,
+    "XAUUSD": None,
+    "EURUSD": None,
+}
+
+def save_active_trades():
+    try:
+        with open(ACTIVE_TRADES_FILE, "w") as f:
+            json.dump(active_trades, f, indent=2, default=str)
+    except Exception as e:
+        print(f"[Active Trades Storage]: Error saving {ACTIVE_TRADES_FILE}: {e}")
+
+def load_active_trades():
+    global active_trades
+    if os.path.exists(ACTIVE_TRADES_FILE):
+        try:
+            with open(ACTIVE_TRADES_FILE, "r") as f:
+                loaded = json.load(f)
+                active_trades.update(loaded)
+                print(f"[Active Trades Storage]: Restored active trades: {loaded}")
+        except Exception as e:
+            print(f"[Active Trades Storage]: Error reading {ACTIVE_TRADES_FILE}: {e}")
+
+
 def broadcast_signal(message: str):
     """Broadcast signal message to ALL active users who have state == 'ON'"""
     all_users = get_all_subscribed_users()
@@ -139,13 +180,6 @@ def broadcast_signal(message: str):
     else:
         # Fallback if no user registered yet
         telegram_bot.send_message(message)
-
-active_trades = {
-    "BTC/USDT": None,
-    "ETH/USDT": None,
-    "XAUUSD": None,
-    "EURUSD": None,
-}
 
 daily_results = []  # stores all closed trades for summary
 
@@ -160,18 +194,25 @@ def mark_signal_active(asset, direction):
 def clear_signal(asset):
     if asset in active_trades:
         active_trades[asset] = None
+        save_active_trades()
 
 def save_active_trade(asset, signal):
     active_trades[asset] = {
-        "direction": signal["signal_type"],
-        "entry":     signal["entry"],
-        "sl":        signal["stop_loss"],
-        "tp1":       signal["tp1"],
-        "tp2":       signal["tp2"],
-        "tp1_hit":   False,
-        "status":    "ACTIVE",
-        "open_time": datetime.now(IST).strftime("%H:%M IST"),
+        "direction":    signal["signal_type"],
+        "entry":        signal["entry"],
+        "sl":           signal["stop_loss"],
+        "tp1":          signal["tp1"],
+        "tp2":          signal["tp2"],
+        "tp1_hit":      False,
+        "status":       "ACTIVE",
+        "open_time":    datetime.now(IST).strftime("%H:%M IST"),
+        "open_ts":      time.time(),
+        "confidence":   signal.get("confidence", "MODERATE"),
+        "setup":        signal.get("setup", "Order Block + FVG"),
+        "confirmation": signal.get("confirmation", "None"),
     }
+    save_active_trades()
+
 
 def check_trade_outcomes():
     for asset, trade in active_trades.items():
@@ -209,6 +250,7 @@ def check_trade_outcomes():
         if result == "TP1_HIT":
             active_trades[asset]["tp1_hit"] = True
             active_trades[asset]["sl"] = trade["entry"]
+            save_active_trades()  # Persist changes
             pts = round(abs(trade["tp1"] - trade["entry"]), 2)
             entry_f = f"{trade['entry']:,}".rstrip('0').rstrip('.')
             tp1_f = f"{trade['tp1']:,}".rstrip('0').rstrip('.')
@@ -241,6 +283,7 @@ Next scan active 🔄"""
             broadcast_signal(msg)
             record_trade_outcome(asset, direction, "WIN", pts, trade)
             active_trades[asset] = None   # clear
+            save_active_trades()  # Persist changes
             print(f"[Outcome Checker]: {asset} TP2 HIT! Trade closed.")
 
         elif result == "SL_HIT":
@@ -271,9 +314,9 @@ Trade closed. Waiting for next valid setup 🔄"""
             broadcast_signal(msg)
             record_trade_outcome(asset, direction, "LOSS", pts if not trade["tp1_hit"] else 0.0, trade)
             active_trades[asset] = None   # clear
+            save_active_trades()  # Persist changes
             print(f"[Outcome Checker]: {asset} SL HIT! Trade closed.")
 
-TRADE_HISTORY_FILE = "trade_history.json"
 
 def load_trade_history() -> list:
     if os.path.exists(TRADE_HISTORY_FILE):
@@ -287,19 +330,32 @@ def load_trade_history() -> list:
 trade_history = load_trade_history()
 
 def record_trade_outcome(asset: str, direction: str, result: str, pts: float, trade: dict = None):
+    # Calculate hold duration
+    hold_mins = 0.0
+    if trade and "open_ts" in trade:
+        try:
+            hold_mins = round((time.time() - float(trade["open_ts"])) / 60, 1)
+        except Exception:
+            pass
+
     rec = {
-        "asset": asset,
-        "direction": direction,
-        "result": result,      # WIN / LOSS
-        "pts": pts,
-        "timestamp": time.time(),
-        "date_str": datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S"),
-        # Full trade details (if trade object provided)
-        "entry":      trade.get("entry", None)    if trade else None,
-        "sl":         trade.get("sl", None)       if trade else None,
-        "tp1":        trade.get("tp1", None)      if trade else None,
-        "tp2":        trade.get("tp2", None)      if trade else None,
-        "open_time":  trade.get("open_time", None) if trade else None,
+        "asset":        asset,
+        "direction":    direction,
+        "result":       result,          # WIN / LOSS
+        "pts":          pts,
+        "timestamp":    time.time(),
+        "date_str":     datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S"),
+        # Full trade details
+        "entry":        trade.get("entry", None) if trade else None,
+        "sl":           trade.get("sl", None) if trade else None,
+        "tp1":          trade.get("tp1", None) if trade else None,
+        "tp2":          trade.get("tp2", None) if trade else None,
+        "open_time":    trade.get("open_time", None) if trade else None,
+        "close_time":   datetime.now(IST).strftime("%H:%M IST | %d-%m-%Y"),
+        "hold_mins":    hold_mins,
+        "confidence":   trade.get("confidence", "MODERATE") if trade else None,
+        "setup_type":   trade.get("setup", "Order Block + FVG") if trade else None,
+        "confirmation": trade.get("confirmation", "None") if trade else None,
     }
     trade_history.append(rec)
     daily_results.append(rec)
