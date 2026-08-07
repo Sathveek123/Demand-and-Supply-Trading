@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     # Server Settings
     PORT: int = int(os.getenv("PORT", "8000"))
     HOST: str = os.getenv("HOST", "0.0.0.0")
+    # Public URL of this app — used by the keep-alive self-pinger.
+    # Set RENDER_EXTERNAL_URL in Render env vars (it's auto-set by Render).
+    # Falls back to the known Render deployment URL.
+    RENDER_EXTERNAL_URL: str = os.getenv(
+        "RENDER_EXTERNAL_URL",
+        "https://demand-and-supply-trading.onrender.com"
+    )
 
     class Config:
         env_file = ".env"

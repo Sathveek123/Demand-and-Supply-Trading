@@ -23,6 +23,7 @@ from core.llm_signal import SignalFormatter
 from bot.telegram_bot import TelegramSignalBot
 from bot.telegram_listener import run_telegram_listener, init_telegram_app
 from core.scheduler import TradingBotScheduler
+from core.keep_alive import start_keep_alive, stop_keep_alive
 from config import settings
 from telegram import Update
 import requests
@@ -34,6 +35,9 @@ async def lifespan(app_instance):
     """FastAPI lifespan handler — runs startup logic, then yields, then shutdown logic."""
     # ── STARTUP ──
     scheduler.start()
+
+    # Keep-Alive self-pinger: prevents Render free-tier spin-down after 15 min inactivity
+    start_keep_alive()
 
     if settings.TELEGRAM_WEBHOOK_URL:
         webhook_url = f"{settings.TELEGRAM_WEBHOOK_URL.rstrip('/')}/telegram/webhook"
@@ -66,6 +70,7 @@ async def lifespan(app_instance):
     yield  # ── application runs here ──
 
     # ── SHUTDOWN ──
+    stop_keep_alive()
     scheduler.stop()
     if settings.TELEGRAM_WEBHOOK_URL:
         try:
