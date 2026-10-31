@@ -387,7 +387,7 @@ no_setup reasons:
                         "timestamp": timestamp_str
                     }
                     response = client.models.generate_content(
-                        model="gemini-2.0-flash",
+                        model="gemini-flash-latest",
                         contents=f"{SignalFormatter.SYSTEM_PROMPT}\n\nFormat this signal: {json.dumps(input_payload)}"
                     )
                     res_text = response.text.strip()
@@ -398,7 +398,10 @@ no_setup reasons:
                         break
                 except Exception as e:
                     err_msg = str(e)
-                    is_daily = "RESOURCE_EXHAUSTED" in err_msg or "Quota exceeded" in err_msg or "429" in err_msg
+                    is_daily = (
+                        "RESOURCE_EXHAUSTED" in err_msg or "Quota exceeded" in err_msg or "429" in err_msg
+                        or "UNAUTHENTICATED" in err_msg or "401" in err_msg or "API key not valid" in err_msg
+                    )
                     GeminiKeyManager.blacklist_key(api_key, is_daily_quota=is_daily)
                     print(f"[LLM Formatter]: API Key failed: {e}. Retrying next key...")
 

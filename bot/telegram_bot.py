@@ -76,8 +76,10 @@ class TelegramSignalBot:
         if not user_ids:
             user_ids = self.chat_ids
 
-        # Merge statically configured chat_ids and dynamic user_ids so NO ONE is missed
-        all_recipients = list(set([str(cid).strip() for cid in (user_ids + self.chat_ids) if str(cid).strip()]))
+        # NOTE: do NOT merge in self.chat_ids here — callers (e.g. broadcast_signal) already
+        # pass the exact, filtered recipient list (respecting each user's ON/OFF state).
+        # Merging the static chat_ids back in would re-add users who turned the bot OFF.
+        all_recipients = list(set(str(cid).strip() for cid in user_ids if str(cid).strip()))
 
         success = True
         for idx, cid in enumerate(all_recipients):

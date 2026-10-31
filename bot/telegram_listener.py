@@ -102,8 +102,9 @@ async def execute_scan(update: Update, asset: str) -> None:
         # Edit loading message directly in-place
         await sent_msg.edit_text(formatted_msg)
         
-        # If valid setup and not blocked by active signal conflict, save trade
-        if analysis.get("valid"):
+        # If valid setup and not blocked by active signal conflict, save trade.
+        # Skip if the formatter itself rejected the signal (e.g. LOW confidence, NULL_SIGNAL guard).
+        if analysis.get("valid") and not (isinstance(formatted_msg, str) and formatted_msg.startswith("NULL_SIGNAL")):
             from app import should_send_signal, save_active_trade, active_trades
             signal_type = analysis.get("signal_type")
             if should_send_signal(asset, signal_type):

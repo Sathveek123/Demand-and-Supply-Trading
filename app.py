@@ -546,6 +546,20 @@ def scan_asset(asset: str = "BTC/USDT", send_telegram: bool = True):
         "telegram_message": formatted_msg
     }
 
+    # Guard: SignalFormatter's own validation rules (trend/SL/confidence/volume) can reject
+    # a signal that SMCEngine marked valid (e.g. LOW confidence). In that case it returns a
+    # bare "NULL_SIGNAL, reason: ..." string instead of a real template — never broadcast or
+    # track that as an active trade.
+    if isinstance(formatted_msg, str) and formatted_msg.startswith("NULL_SIGNAL"):
+        print(f"[SMC Scanner]: {clean_asset} signal rejected by formatter guard: {formatted_msg}")
+        return {
+            "asset": clean_asset,
+            "valid_setup": False,
+            "reason": formatted_msg,
+            "analysis": analysis,
+            "telegram_message": formatted_msg
+        }
+
     if analysis.get("valid") and send_telegram:
         signal_type = analysis.get("signal_type")
         if not should_send_signal(clean_asset, signal_type):
