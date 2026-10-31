@@ -14,6 +14,14 @@ class SMCEngine:
     7. Position Sizing & Execution Zone Calculations
     """
 
+    # Tunable strategy thresholds. Backtested over ~60 days (see backtest.py --compare):
+    # these strict values returned +28R/143 trades vs. -1R/345 trades for a looser variant
+    # (OB=1.5, FVG=1.6, RANGE=0.5) — more signals there, but win rate fell below the ~33%
+    # breakeven point for this 1:2 R:R setup. Keep these unless a future backtest says otherwise.
+    OB_IMPULSE_MULT = 2.0      # Order Block impulse candle must move >= this many ATRs
+    FVG_ATR_LIMIT_MULT = 1.3   # Max OB<->FVG midpoint distance for confluence, in ATRs
+    RANGING_ATR_MULT = 0.6     # 15M range below this x avg ATR is rejected as ranging
+
     @staticmethod
     def calculate_atr(df: pd.DataFrame, period: int = 14) -> Optional[float]:
         """True Range -> ATR. Returns the latest ATR value as a float."""
@@ -178,7 +186,7 @@ class SMCEngine:
         
         # Calculate 20-candle average volume baseline
         avg_vol = np.mean(volumes) if len(volumes) > 0 else 1.0
-        impulse_threshold = 2.0 * atr
+        impulse_threshold = cls.OB_IMPULSE_MULT * atr
 
         for i in range(1, len(subset) - 1):
             move = abs(closes[i + 1] - closes[i])
@@ -382,7 +390,7 @@ class SMCEngine:
         avg_atr = atr_series.rolling(20).mean().iloc[-1]
         latest_range = df_15m["high"].iloc[-1] - df_15m["low"].iloc[-1]
         
-        if latest_range < (avg_atr * 0.6):
+        if latest_range < (avg_atr * SMCEngine.RANGING_ATR_MULT):
             return False  # Ranging — ATR compressed
         return True  # Trending — ATR expanding
 
@@ -463,8 +471,8 @@ class SMCEngine:
                 "trend_15m": trend_15m
             }
 
-        # Dynamic FVG confluence limit (1.3 * ATR)
-        atr_limit = atr_14 * 1.3
+        # Dynamic FVG confluence limit
+        atr_limit = atr_14 * cls.FVG_ATR_LIMIT_MULT
 
         has_fvg = False
         best_fvg_dist = atr_limit
