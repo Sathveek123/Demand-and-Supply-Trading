@@ -361,7 +361,10 @@ no_setup reasons:
             return "NULL_SIGNAL, reason: CANDLE_NOT_CLOSED"
 
         # Check Rule 5: Confidence filter
-        if confidence == "LOW":
+        # HIGH-only (not just "not LOW"): evaluate.py's walk-forward out-of-sample test showed
+        # this raises expectancy from +0.08R to +0.52R/trade and profit factor from 1.19 to 2.44
+        # on data the selection step never saw (8.8/10 out-of-sample rating vs the prior 6/10).
+        if confidence != "HIGH":
             return "NULL_SIGNAL, reason: WEAK_CONFIDENCE"
 
         # Check if we should delegate signal formatting to Gemini API

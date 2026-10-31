@@ -15,7 +15,12 @@ class Settings(BaseSettings):
     USE_LLM_FORMATTER: bool = os.getenv("USE_LLM_FORMATTER", "True").lower() == "true"
     
     # Trading Strategy Settings
-    DEFAULT_ASSETS: list[str] = ["BTC/USDT", "ETH/USDT", "XAUUSD", "EURUSD"]
+    # XAUUSD dropped from auto-scan: evaluate.py's walk-forward out-of-sample test
+    # (trained on first 70% of ~60d history, validated on the untouched last 30%)
+    # showed negative expectancy for gold and a +13R/44% win rate/8.8 rating improvement
+    # for BTC+ETH+EURUSD without it. Still reachable manually via /debug XAUUSD or the
+    # GOLD button if you want to keep an eye on it.
+    DEFAULT_ASSETS: list[str] = ["BTC/USDT", "ETH/USDT", "EURUSD"]
     SL_BUFFER_PIPS: float = 3.0  # Buffer pips/points beyond OB wick
     
     # Server Settings
