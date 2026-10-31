@@ -79,14 +79,10 @@ async def execute_scan(update: Update, asset: str) -> None:
     try:
         # Check if asset is crypto, forex, commodity or stock/index
         if any(k in asset.upper() for k in ["/", "USDT", "BTC", "ETH", "SOL", "XAU", "GOLD", "EUR"]):
-            df_15m = fetcher.fetch_crypto_candles(symbol=asset, timeframe="15m", limit=100)
-            time.sleep(2.0)
-            df_3m = fetcher.fetch_crypto_candles(symbol=asset, timeframe="3m", limit=100)
+            df_15m, df_3m = fetcher.fetch_dual_timeframe(symbol=asset, limit=100, kind="crypto")
         else:
             ticker = "^NSEI" if "NIFTY" in asset.upper() else fetcher._symbol_to_yf(asset)
-            df_15m = fetcher.fetch_stock_candles(ticker=ticker, timeframe="15m", limit=100)
-            time.sleep(2.0)
-            df_3m = fetcher.fetch_stock_candles(ticker=ticker, timeframe="3m", limit=100)
+            df_15m, df_3m = fetcher.fetch_dual_timeframe(symbol=ticker, limit=100, kind="stock")
 
         # Fetch live price
         live_price = None
@@ -169,9 +165,7 @@ async def execute_debug(update: Update, asset: str) -> None:
     )
 
     try:
-        df_15m = fetcher.fetch_crypto_candles(symbol=asset, timeframe="15m", limit=100)
-        time.sleep(2.0)
-        df_3m = fetcher.fetch_crypto_candles(symbol=asset, timeframe="3m", limit=100)
+        df_15m, df_3m = fetcher.fetch_dual_timeframe(symbol=asset, limit=100, kind="crypto")
 
         live_price = None
         try:

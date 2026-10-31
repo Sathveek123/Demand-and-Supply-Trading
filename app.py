@@ -504,16 +504,11 @@ def scan_asset(asset: str = "BTC/USDT", send_telegram: bool = True):
 
     # Check if asset is crypto, forex, commodity or stock/index
     if any(k in clean_asset for k in ["/", "USDT", "BTC", "ETH", "SOL", "XAU", "GOLD", "EUR"]):
-        df_15m = fetcher.fetch_crypto_candles(symbol=clean_asset, timeframe="15m", limit=100)
-        eth_sleep = 3.0 if "ETH" in clean_asset.upper() else 2.0  # ETH needs longer gap to bust cache
-        time.sleep(eth_sleep)
-        df_3m = fetcher.fetch_crypto_candles(symbol=clean_asset, timeframe="3m", limit=100)
+        df_15m, df_3m = fetcher.fetch_dual_timeframe(symbol=clean_asset, limit=100, kind="crypto")
     else:
         # Map ticker query cleanups
         ticker = "^NSEI" if "NIFTY" in clean_asset else fetcher._symbol_to_yf(clean_asset)
-        df_15m = fetcher.fetch_stock_candles(ticker=ticker, timeframe="15m", limit=100)
-        time.sleep(2.0)
-        df_3m = fetcher.fetch_stock_candles(ticker=ticker, timeframe="3m", limit=100)
+        df_15m, df_3m = fetcher.fetch_dual_timeframe(symbol=ticker, limit=100, kind="stock")
 
     # Post-Fetch Identity Check (Stale Cache Guard)
     # Detects if yfinance returned stale cached data (where 15M close == 3M close for crypto/metals)

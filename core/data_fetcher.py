@@ -156,6 +156,34 @@ class MarketDataFetcher:
         print(f"[MarketDataFetcher]: All sources failed for {symbol}. Using simulated candles.")
         return self._generate_simulated_candles(symbol=symbol, timeframe=timeframe, limit=limit)
 
+    def fetch_dual_timeframe(self, symbol: str, limit: int = 100, kind: str = "crypto",
+                              max_retries: int = 3, base_sleep: float = 2.0):
+        """
+        Fetches 15M then 3M candles, retrying the 3M fetch with increasing jittered
+        delay if Yahoo Finance's CDN returns a stale/cached bar whose close exactly
+        matches the 15M close (observed intermittently on BTC and ETH intraday feeds).
+        Replaces the old fixed-sleep-per-symbol heuristic with an actual freshness check.
+        """
+        import random
+        fetch_fn = self.fetch_crypto_candles if kind == "crypto" else self.fetch_stock_candles
+        arg_name = "symbol" if kind == "crypto" else "ticker"
+
+        df_15m = fetch_fn(**{arg_name: symbol, "timeframe": "15m", "limit": limit})
+        last_15m_close = float(df_15m['close'].iloc[-1]) if not df_15m.empty else None
+
+        df_3m = pd.DataFrame()
+        for attempt in range(max_retries):
+            time.sleep(base_sleep + attempt * 1.5 + random.uniform(0, 0.5))
+            df_3m = fetch_fn(**{arg_name: symbol, "timeframe": "3m", "limit": limit})
+            if df_3m.empty:
+                continue
+            last_3m_close = float(df_3m['close'].iloc[-1])
+            if last_15m_close is None or last_3m_close != last_15m_close:
+                return df_15m, df_3m
+            print(f"[MarketDataFetcher]: Stale 3M close for {symbol} (matches 15M {last_15m_close:.4f}), retry {attempt + 1}/{max_retries}")
+
+        return df_15m, df_3m
+
     def fetch_stock_candles(self, ticker: str = "^NSEI", timeframe: str = "3m", limit: int = 100) -> pd.DataFrame:
         """
         Fetches OHLCV candle data for stock indices (Nifty ^NSEI, BankNifty ^NSEBANK) using YFinance.
